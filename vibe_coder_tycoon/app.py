@@ -6,10 +6,11 @@ from .ui.helpers import (
     safe_addstr, fill_background, draw_topbar, draw_tabs, draw_statusbar,
 )
 from .ui.screens.title import draw_title_screen, draw_credits, TITLE_MENU
+from .ui.screens.loading import run_loading_screen
 from .ui.screens.auth import (
     SignInState, SignUpState, draw_sign_in, draw_sign_up,
 )
-from .ui.screens.settings import SettingsUIState, draw_settings_screen
+from .ui.screens.settings import SettingsUIState, draw_settings_screen, SETTINGS_OPTIONS
 from .ui.screens.dashboard import draw_dashboard
 from .ui.screens.founder import draw_founder
 from .ui.screens.companies import CompaniesUIState, draw_companies
@@ -53,6 +54,9 @@ def main(stdscr):
     curses.curs_set(0)
     stdscr.keypad(True)
     stdscr.timeout(100)
+
+    # ── Loading screen (feels nice, ~3s) ──
+    run_loading_screen(stdscr, duration=3.0)
 
     # ── State ──
     screen = "title"    # title | sign_in | sign_up | credits | settings_pre | game
@@ -187,6 +191,7 @@ def main(stdscr):
                     )
                     gs = make_new_game(founder, 0)
                     current_user = None
+                    run_loading_screen(stdscr)
                     screen = "game"
                     active_tab = 0
                     status_msg = "Playing offline. Progress will not be saved."
@@ -214,6 +219,7 @@ def main(stdscr):
                 )
                 gs = make_new_game(founder, 0)
                 current_user = None
+                run_loading_screen(stdscr)
                 screen = "game"
                 status_msg = "Playing offline."
             elif key == ord('r') or key == ord('R'):
@@ -239,6 +245,7 @@ def main(stdscr):
                             total_tokens_used=0,
                         )
                         gs = make_new_game(founder, 0)
+                    run_loading_screen(stdscr)
                     screen = "game"
                     status_msg = f"Welcome back, {current_user}!"
             else:
@@ -343,6 +350,7 @@ def main(stdscr):
                         total_tokens_used=0,
                     )
                     gs = make_new_game(founder, sign_up_state.ai_sub_sel)
+                    run_loading_screen(stdscr)
                     screen = "game"
                     status_msg = f"Welcome, {current_user}! Your journey begins."
 

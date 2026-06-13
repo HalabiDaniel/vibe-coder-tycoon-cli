@@ -1,4 +1,5 @@
 import curses
+import unicodedata
 
 from .colors import *
 from ..constants import TABS, AI_SUBS, MONTH_NAMES
@@ -6,6 +7,28 @@ from ..models import GameState
 
 
 # ─────────────────────── DRAWING HELPERS ──────────────────────
+
+def char_width(ch):
+    """Return the number of terminal cells a character occupies.
+
+    Most emoji and symbols render two cells wide even though ``len`` counts
+    them as a single character. Getting this right keeps column positions in
+    the top bar aligned instead of overlapping/cutting each other off.
+    """
+    if ch == "\uFE0F" or unicodedata.combining(ch):
+        return 0
+    o = ord(ch)
+    if (0x1F000 <= o <= 0x1FAFF or   # emoji & pictographs
+            0x2600 <= o <= 0x27BF or  # misc symbols & dingbats (⚡ ⭐-ish)
+            0x2B00 <= o <= 0x2BFF or  # ⭐ and friends
+            0x1F900 <= o <= 0x1F9FF or
+            unicodedata.east_asian_width(ch) in ("W", "F")):
+        return 2
+    return 1
+
+def disp_width(text):
+    """Display width of a string in terminal cells (emoji-aware)."""
+    return sum(char_width(c) for c in text)
 
 def safe_addstr(win, y, x, text, attr=0):
     try:
@@ -66,6 +89,32 @@ def center_text(win, y, text, attr):
     x = max(0, (w - len(text)) // 2)
     safe_addstr(win, y, x, text, attr)
 
+def input_field(win, y, x, width, value, *, focus=False, secret=False, blink=False):
+    """Draw a single-line text input with a visible border.
+
+    Occupies 3 rows (top border, text row, bottom border) starting at row `y`
+    and spanning `width` columns. A focused field gets a bright amber border;
+    idle fields use a dim border so they stay visible but recede.
+    """
+    width = max(4, width)
+    border_pair = PAIR_MENU_LOGO if focus else PAIR_MENU_DIM
+    bp = curses.color_pair(border_pair) | (curses.A_BOLD if focus else 0)
+
+    safe_addstr(win, y,     x, "┌" + "─" * (width - 2) + "┐", bp)
+    safe_addstr(win, y + 1, x,             "│", bp)
+    safe_addstr(win, y + 1, x + width - 1, "│", bp)
+    safe_addstr(win, y + 2, x, "└" + "─" * (width - 2) + "┘", bp)
+
+    display = ("•" * len(value)) if secret else value
+    inner_w = width - 4                      # one space padding each side
+    shown = display[-inner_w:] if len(display) > inner_w else display
+    txt_attr = curses.color_pair(PAIR_MENU_OVERLAY) | (curses.A_BOLD if focus else 0)
+    safe_addstr(win, y + 1, x + 2, shown.ljust(inner_w), txt_attr)
+
+    if focus and blink:
+        cx = x + 2 + min(len(shown), inner_w - 1)
+        safe_addstr(win, y + 1, cx, "█", curses.color_pair(PAIR_MENU_LOGO) | curses.A_BLINK)
+
 def draw_topbar(win, gs: GameState):
     h, w = win.getmaxyx()
     win.attron(curses.color_pair(PAIR_TOPBAR))
@@ -79,22 +128,28 @@ def draw_topbar(win, gs: GameState):
     sub = AI_SUBS[gs.active_ai_sub_idx]["name"]
     date_str = f"{MONTH_NAMES[gs.month-1]} {gs.year}"
 
-    stats = [
-        (f"   📅 {date_str}",              curses.color_pair(PAIR_TOPBAR)),
-        (f"   💰 ${total_cash:,}",          curses.color_pair(PAIR_TOPBAR) | curses.A_BOLD),
-        (f"   🤖 {sub}",                    curses.color_pair(PAIR_TOPBAR)),
-        (f"   🔥 Burnout:{gs.founder.burnout}%", curses.color_pair(PAIR_TOPBAR)),
-        (f"   ⭐ Rep:{gs.founder.reputation}", curses.color_pair(PAIR_TOPBAR)),
-        (f"   🏢 {len(gs.active_companies())} cos", curses.color_pair(PAIR_TOPBAR)),
-    ]
-    cx = len(logo) + 2
-    for text, attr in stats:
-        safe_addstr(win, 0, cx, text, attr)
-        cx += len(text)
-
+    # Player name is right-aligned; reserve its space so stats never collide.
     pname = f" 👤 {gs.founder.username}  "
-    safe_addstr(win, 0, w - len(pname) - 1, pname,
+    name_x = w - disp_width(pname) - 1
+    safe_addstr(win, 0, name_x, pname,
                 curses.color_pair(PAIR_TOPBAR) | curses.A_BOLD)
+
+    stats = [
+        (f"  📅 {date_str}",                     curses.color_pair(PAIR_TOPBAR)),
+        (f"  💰 ${total_cash:,}",                curses.color_pair(PAIR_TOPBAR) | curses.A_BOLD),
+        (f"  🤖 {sub}",                          curses.color_pair(PAIR_TOPBAR)),
+        (f"  🔥 Burnout:{gs.founder.burnout}%",  curses.color_pair(PAIR_TOPBAR)),
+        (f"  ⭐ Rep:{gs.founder.reputation}",     curses.color_pair(PAIR_TOPBAR)),
+        (f"  🏢 {len(gs.active_companies())} cos", curses.color_pair(PAIR_TOPBAR)),
+    ]
+    cx = disp_width(logo) + 2
+    for text, attr in stats:
+        tw = disp_width(text)
+        # Stop before we'd overrun the reserved player-name area.
+        if cx + tw > name_x:
+            break
+        safe_addstr(win, 0, cx, text, attr)
+        cx += tw
 
 def draw_tabs(win, active_tab: int):
     h, w = win.getmaxyx()
@@ -113,7 +168,7 @@ def draw_tabs(win, active_tab: int):
                         curses.color_pair(PAIR_TAB_INACTIVE))
         cx += len(label)
 
-    hints = " Tab:Switch  Q:Quit  N:Next Month  Enter:Select "
+    hints = " Tab→  Shift+Tab←  Q:Quit  N:Next Month  Enter:Select "
     safe_addstr(win, 1, w - len(hints) - 1, hints, curses.color_pair(PAIR_MUTED))
 
 def draw_statusbar(win, msg: str):
