@@ -14,7 +14,7 @@ from ...models import GameState, Founder, Company, Project, Employee
 
 @dataclass
 class ProjectsUIState:
-    view: str = "list"      # "list" | "detail" | "new_step1" | "new_step2" | "new_step3" | "new_review"
+    view: str = "list"      # "list" | "new" | "dev"
     selected: int = 0
     filter_status: str = "All"
     new_fields: list = field(default_factory=lambda: [
@@ -31,16 +31,17 @@ class ProjectsUIState:
     new_step: int = 0   # 0=company select, 1=config, 2=review
     new_company_idx: int = 0
     message: str = ""
+    dev_project_idx: int = -1   # index into gs.projects for dev view
 
 def draw_projects(win, gs: GameState, ui: ProjectsUIState):
     h, w = win.getmaxyx()
 
-    if ui.view.startswith("new"):
+    if ui.view == "new":
         _draw_new_project_wizard(win, gs, ui)
         return
 
     y = 3
-    filters = ["All", "In Dev", "Launched", "Growing", "Failed", "Archived", "Sold"]
+    filters = ["All", "In Dev", "Dev Complete", "Launched", "Growing", "Failed", "Archived", "Sold"]
     safe_addstr(win, y, 2, " PROJECTS  ", curses.color_pair(PAIR_TITLE) | curses.A_BOLD)
     fx = 16
     for f in filters:
@@ -53,7 +54,8 @@ def draw_projects(win, gs: GameState, ui: ProjectsUIState):
     y += 2
 
     visible = [p for p in gs.projects
-               if ui.filter_status == "All" or p.status == ui.filter_status]
+               if ui.filter_status == "All" or p.status == ui.filter_status
+               or (ui.filter_status == "In Dev" and p.status == "Dev Complete")]
 
     header = f"  {'NAME':<20} {'COMPANY':<22} {'TYPE':<16} {'STATUS':<10} {'MRR':>7} {'USERS':>7}"
     hline(win, y, 1, w-2, PAIR_BORDER)
@@ -113,14 +115,20 @@ def draw_projects(win, gs: GameState, ui: ProjectsUIState):
             safe_addstr(win, y+row_off, dx+len(k)+2, v, curses.color_pair(PAIR_ACCENT))
 
         act_y = y + (len(details)-1)//3 + 2
-        actions = ["[ Launch ]", "[ Sunset ]", "[ Boost (200cr) ]", "[ View Analytics ]", "[ Archive ]"]
-        ax = 4
-        for act in actions:
+        if p.status in ("In Dev", "Dev Complete"):
+            dev_label = "[ Enter: Open Dev Dashboard ]"
+            safe_addstr(win, min(act_y, h-5), 4, dev_label,
+                        curses.color_pair(PAIR_BUTTON_FOCUS) | curses.A_BOLD)
+            ax = 4 + len(dev_label) + 2
+        else:
+            ax = 4
+        other_actions = ["[ Sunset ]", "[ View Analytics ]", "[ Archive ]"]
+        for act in other_actions:
             safe_addstr(win, min(act_y, h-5), ax, act, curses.color_pair(PAIR_BUTTON) | curses.A_BOLD)
             ax += len(act) + 2
 
     safe_addstr(win, h-4, 2,
-                "Up/Down: select  |  ◄/►: filter  |  N: new project  |  Enter: action",
+                "Up/Down: select  |  ◄/►: filter  |  N: new project  |  Enter: dev dashboard",
                 curses.color_pair(PAIR_MUTED))
 
 def _draw_new_project_wizard(win, gs: GameState, ui: ProjectsUIState):

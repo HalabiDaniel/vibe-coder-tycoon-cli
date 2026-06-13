@@ -187,3 +187,128 @@ LENDERS = [
 # Cycling auto-deposit percentages (used by toggle in Companies tab)
 AUTO_DEPOSIT_CYCLE = [0, 10, 25, 50]
 
+# ─────────────────────── PHASE 2 DATA ─────────────────────────
+
+FEATURE_SCOPES = {
+    "Lean MVP":       {"features": 3,  "base_days": 30,  "token_mult": 0.5},
+    "Standard":       {"features": 6,  "base_days": 60,  "token_mult": 1.0},
+    "Feature-Rich":   {"features": 10, "base_days": 90,  "token_mult": 1.8},
+    "Overengineered": {"features": 15, "base_days": 150, "token_mult": 3.0},
+}
+
+QA_OPTIONS = [
+    {"name": "Skip QA",  "cost": 0,   "days": 0, "bug_mult": 1.0, "critical_risk": 0.0,
+     "desc": "Ship it and pray."},
+    {"name": "Light QA", "cost": 200, "days": 3, "bug_mult": 0.6, "critical_risk": 0.05,
+     "desc": "Quick smoke test. Cuts bugs by 40%."},
+    {"name": "Full QA",  "cost": 800, "days": 7, "bug_mult": 0.2, "critical_risk": 0.15,
+     "desc": "Deep coverage. Risk of surfacing a critical flaw."},
+]
+
+DEV_INTERRUPTION_EVENTS = [
+    {
+        "id": "hallucination",
+        "title": "AI Hallucination",
+        "body": "Your AI confidently wrote an entire auth system using an API that doesn't exist.",
+        "prob": 0.12,
+        "choices": [
+            {"label": "Rewrite manually",    "effects": {"tech_score": 8,  "dev_day": -5, "vibe": -5}},
+            {"label": "Ship it anyway",      "effects": {"bug_count": 3,   "hype": 5,     "sanity": -5}},
+        ],
+    },
+    {
+        "id": "api_outage",
+        "title": "API Outage",
+        "body": "Your AI provider is down. Status page says 'investigating.' It's been 4 hours.",
+        "prob": 0.08,
+        "choices": [
+            {"label": "Switch to backup model", "effects": {"tokens_used": 100, "dev_day": -2}},
+            {"label": "Take a forced break",    "effects": {"sanity": 10,       "vibe": 5}},
+        ],
+    },
+    {
+        "id": "context_window",
+        "title": "Context Window Exceeded",
+        "body": "Your codebase is too large for the AI to comprehend. It keeps forgetting things.",
+        "prob": 0.10,
+        "choices": [
+            {"label": "Refactor into modules", "effects": {"tech_score": 10, "dev_day": -7}},
+            {"label": "Summarize and continue","effects": {"tech_score": -5, "bug_count": 2}},
+        ],
+    },
+    {
+        "id": "vibe_overflow",
+        "title": "Vibe Overflow",
+        "body": "16 hours deep. The code looks great. Is it great? Impossible to say.",
+        "prob": 0.15,
+        "choices": [
+            {"label": "Push through (CHAOS MODE)", "effects": {"design_score": 10, "bug_count": 4, "sanity": -10}},
+            {"label": "Sleep on it",               "effects": {"sanity": 15, "vibe": -10, "dev_day": -2}},
+        ],
+    },
+]
+
+DEV_ACTIONS = [
+    {
+        "key": "1", "name": "Honest Devlog",
+        "desc": "Write an honest update. Builds rep and modest hype.",
+        "cost": 0,
+        "effects": {"reputation": 2, "hype": 5, "sanity": 2},
+    },
+    {
+        "key": "2", "name": "Vibe-Coding Thread",
+        "desc": "Post your build journey. Big hype boost but burns vibe.",
+        "cost": 0,
+        "effects": {"hype": 15, "vibe": -10, "reputation": 1},
+    },
+    {
+        "key": "3", "name": "Fake a Feature",
+        "desc": "Announce a feature that barely works. Big hype, reputation risk at launch.",
+        "cost": 0,
+        "effects": {"hype": 20, "reputation": -3, "faked": True},
+    },
+    {
+        "key": "4", "name": "Buy Ads",
+        "desc": "Spend $200 on targeted ads. Solid hype boost.",
+        "cost": 200,
+        "effects": {"hype": 12, "reputation": 1},
+    },
+    {
+        "key": "5", "name": "Bribe Influencer",
+        "desc": "Pay $500 to an influencer. Massive hype but sketchy reputation.",
+        "cost": 500,
+        "effects": {"hype": 30, "reputation": -5},
+    },
+]
+
+TERMINAL_LOG_LINES = [
+    "Compiling components... done.",
+    "npm warn deprecated package@1.0.0",
+    "AI generated 400 lines of suspiciously clean code.",
+    "Bug detected in auth module. Again.",
+    "Token usage: nominal.",
+    "Design system: 70% complete.",
+    "Running tests... 3 passing, 12 failing.",
+    "Pushed to main. CI is green.",
+    "Context window: 87% full.",
+    "Hallucination detected in route handler.",
+    "Successfully refactored for the third time today.",
+    "Tech debt increasing.",
+    "Hype building from community post...",
+    "Feature complete: user dashboard.",
+    "Deploying to staging...",
+    "Memory leak identified and patched.",
+    "Rate limited by AI provider. Throttling.",
+    "Code review: 'looks good to me'",
+    "Merge conflict resolved (sort of).",
+    "AI suggests renaming everything. Again.",
+    "Build time: 4m 23s. Too long.",
+    "Wrote tests. AI wrote the tests. AI passed the tests.",
+    "Dependency audit: 3 critical vulnerabilities.",
+    "Refactoring hour three. Still no progress.",
+    "The AI is writing poetry in the comments.",
+    "Shipped a fix. Introduced two new bugs.",
+    "Type errors: 47. Ship it anyway.",
+    "User story complete: undefined requirements met.",
+]
+

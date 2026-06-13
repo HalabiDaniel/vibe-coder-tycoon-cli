@@ -18,6 +18,7 @@ from .ui.screens.dashboard import draw_dashboard
 from .ui.screens.founder import draw_founder
 from .ui.screens.companies import CompaniesUIState, draw_companies
 from .ui.screens.projects import ProjectsUIState, draw_projects
+from .ui.screens.development import DevUIState, draw_development
 from .ui.screens.employees import EmployeesUIState, draw_employees
 from .ui.screens.market import draw_market
 from .ui.screens.research import ResearchUIState, draw_research
@@ -39,7 +40,7 @@ from .constants import (
     TABS, BACKGROUNDS, AI_SUBS, DEMO_MONTH_LIMIT, MONTH_NAMES,
     EMPLOYEE_ROLES, EMPLOYEE_TRAITS, RESEARCH_CATEGORIES,
     COMPANY_LEGAL_STYLES, COMPANY_FOCUS_AREAS, FUNDING_STYLES, RISK_APPETITES,
-    PROJECT_TYPES, TECH_STACKS, NICHES, AUTO_DEPOSIT_CYCLE,
+    PROJECT_TYPES, TECH_STACKS, NICHES, AUTO_DEPOSIT_CYCLE, FEATURE_SCOPES, QA_OPTIONS,
 )
 
 
@@ -103,6 +104,7 @@ def main(stdscr):
     dash_company_sel = 0
     companies_ui  = CompaniesUIState()
     projects_ui   = ProjectsUIState()
+    dev_ui        = DevUIState()
     employees_ui  = EmployeesUIState()
     research_ui   = ResearchUIState()
     news_ui       = NewsUIState()
@@ -199,7 +201,10 @@ def main(stdscr):
                 elif tab == "Companies":
                     draw_companies(stdscr, gs, companies_ui)
                 elif tab == "Projects":
-                    draw_projects(stdscr, gs, projects_ui)
+                    if projects_ui.view == "dev":
+                        draw_development(stdscr, gs, projects_ui.dev_project_idx, dev_ui)
+                    else:
+                        draw_projects(stdscr, gs, projects_ui)
                 elif tab == "Employees":
                     draw_employees(stdscr, gs, employees_ui)
                 elif tab == "Market":
@@ -853,20 +858,73 @@ def main(stdscr):
                                 companies_ui.view = "list"
 
             elif tab == "Projects":
-                if projects_ui.view == "list":
+                _DEV_FILTERS = ["All", "In Dev", "Dev Complete", "Launched", "Growing", "Failed", "Archived", "Sold"]
+
+                if projects_ui.view == "dev":
+                    p_idx = projects_ui.dev_project_idx
+                    p = gs.projects[p_idx] if 0 <= p_idx < len(gs.projects) else None
+                    ds = p.dev_session if p else None
+
+                    if key == 27:
+                        projects_ui.view = "list"
+                    elif ds and ds.pending_interruption:
+                        # Route keys to interruption overlay
+                        choices = ds.pending_interruption.get("choices", [])
+                        if key == curses.KEY_UP:
+                            ds.interruption_choice_idx = max(0, ds.interruption_choice_idx - 1)
+                        elif key == curses.KEY_DOWN:
+                            ds.interruption_choice_idx = min(len(choices)-1, ds.interruption_choice_idx + 1)
+                        elif key in (10, curses.KEY_ENTER):
+                            result = dispatch(gs, "dev_resolve_interruption",
+                                              project_idx=p_idx,
+                                              choice_idx=ds.interruption_choice_idx)
+                            status_msg = result.message
+                    elif p and p.status == "Dev Complete" and key in (ord('l'), ord('L')):
+                        result = dispatch(gs, "dev_launch", project_idx=p_idx)
+                        status_msg = result.message
+                        if result.ok:
+                            projects_ui.view = "list"
+                    elif key == curses.KEY_LEFT:
+                        dev_ui.action_sel = (dev_ui.action_sel - 1) % 5
+                    elif key == curses.KEY_RIGHT:
+                        dev_ui.action_sel = (dev_ui.action_sel + 1) % 5
+                    elif key in (10, curses.KEY_ENTER):
+                        result = dispatch(gs, "dev_do_action",
+                                          project_idx=p_idx,
+                                          action_idx=dev_ui.action_sel)
+                        status_msg = result.message
+                    elif key in (ord('p'), ord('P')):
+                        result = dispatch(gs, "dev_toggle_pause", project_idx=p_idx)
+                        status_msg = result.message
+                    elif key in (ord('q'), ord('Q')):
+                        if p:
+                            cur_idx = next((i for i, q in enumerate(QA_OPTIONS) if q["name"] == p.qa_level), 0)
+                            new_idx = (cur_idx + 1) % len(QA_OPTIONS)
+                            result = dispatch(gs, "dev_set_qa", project_idx=p_idx, qa_idx=new_idx)
+                            status_msg = result.message
+                    elif 49 <= key <= 53:   # keys 1-5 for direct action
+                        action_idx = key - 49
+                        result = dispatch(gs, "dev_do_action",
+                                          project_idx=p_idx,
+                                          action_idx=action_idx)
+                        status_msg = result.message
+
+                elif projects_ui.view == "list":
+                    _visible = [p for p in gs.projects
+                                if projects_ui.filter_status == "All"
+                                or p.status == projects_ui.filter_status
+                                or (projects_ui.filter_status == "In Dev" and p.status == "Dev Complete")]
                     if key == curses.KEY_UP:
                         projects_ui.selected = max(0, projects_ui.selected - 1)
                     elif key == curses.KEY_DOWN:
                         projects_ui.selected = min(len(gs.projects)-1,
                                                    projects_ui.selected + 1)
                     elif key == curses.KEY_LEFT:
-                        filters = ["All", "In Dev", "Launched", "Growing", "Failed", "Archived", "Sold"]
-                        idx = filters.index(projects_ui.filter_status)
-                        projects_ui.filter_status = filters[(idx-1) % len(filters)]
+                        idx = _DEV_FILTERS.index(projects_ui.filter_status) if projects_ui.filter_status in _DEV_FILTERS else 0
+                        projects_ui.filter_status = _DEV_FILTERS[(idx-1) % len(_DEV_FILTERS)]
                     elif key == curses.KEY_RIGHT:
-                        filters = ["All", "In Dev", "Launched", "Growing", "Failed", "Archived", "Sold"]
-                        idx = filters.index(projects_ui.filter_status)
-                        projects_ui.filter_status = filters[(idx+1) % len(filters)]
+                        idx = _DEV_FILTERS.index(projects_ui.filter_status) if projects_ui.filter_status in _DEV_FILTERS else 0
+                        projects_ui.filter_status = _DEV_FILTERS[(idx+1) % len(_DEV_FILTERS)]
                     elif key in (ord('n'), ord('N')):
                         if gs.active_companies():
                             projects_ui.view = "new"
@@ -874,6 +932,15 @@ def main(stdscr):
                             projects_ui.message = ""
                         else:
                             status_msg = "Create a company first before adding a project."
+                    elif key in (10, curses.KEY_ENTER):
+                        if _visible and 0 <= projects_ui.selected < len(_visible):
+                            p = _visible[projects_ui.selected]
+                            if p.status in ("In Dev", "Dev Complete"):
+                                p_idx = gs.projects.index(p)
+                                projects_ui.dev_project_idx = p_idx
+                                projects_ui.view = "dev"
+                                dev_ui.action_sel = 0
+
                 elif projects_ui.view == "new":
                     if key == 27:
                         if projects_ui.new_step > 0:
@@ -1107,16 +1174,28 @@ def _handle_new_project_keys(key, ui: ProjectsUIState, gs: GameState, status_msg
             sub_name = [s["name"] for s in AI_SUBS][ui.new_fields[2]["selected"]]
             stack    = TECH_STACKS[ui.new_fields[3]["selected"]]
             niche    = NICHES[ui.new_fields[4]["selected"]]
+            scope    = ["Lean MVP", "Standard", "Feature-Rich", "Overengineered"][ui.new_fields[5]["selected"]]
+            try:    budget = int(ui.new_fields[6]["value"])
+            except: budget = 500
+            try:    dev_weeks = int(ui.new_fields[7]["value"])
+            except: dev_weeks = 4
+            scope_data = FEATURE_SCOPES.get(scope, FEATURE_SCOPES["Standard"])
             active   = gs.active_companies()
             cid      = active[ui.new_company_idx].id if active else 0
             p = Project(
                 name=name, ptype=ptype, model=sub_name, stack=stack, niche=niche,
                 company_id=cid, status="In Dev", progress=0,
                 revenue=0, users=0, morale=80, tokens_used=0,
+                scope=scope, budget=budget, dev_weeks=dev_weeks,
+                dev_total_days=scope_data["base_days"],
             )
             gs.projects.append(p)
-            gs.events.insert(0, ("🚀", f"Project '{name}' started!", "good",
+            p_idx = len(gs.projects) - 1
+            # Kick off dev session immediately
+            from .engine.systems.development import start_dev_session
+            start_dev_session(gs, p_idx)
+            gs.events.insert(0, ("💻", f"Project '{name}' started! ({scope}, {scope_data['base_days']} days)", "good",
                                   f"{MONTH_NAMES[gs.month-1]} {gs.year}"))
-            ui.message = f"'{name}' added to your queue!"
+            ui.message = f"'{name}' added! Open dev dashboard to manage it."
             ui.view = "list"
             ui.new_step = 0

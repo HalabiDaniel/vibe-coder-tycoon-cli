@@ -11,7 +11,8 @@ from ..constants import AI_SUBS, BACKGROUNDS, MONTH_NAMES
 from ..models import GameState, Founder, Company, Project, Employee
 from ..persistence import default_settings
 from .actions import dispatch, ActionResult  # noqa: F401 — re-exported
-from .systems import finance  # registers finance actions as a side-effect
+from .systems import finance        # registers finance actions as a side-effect
+from .systems import development    # registers dev actions as a side-effect
 
 
 def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
@@ -82,21 +83,11 @@ def advance_month(gs: GameState) -> str:
     finance_events = finance.monthly_settlement(gs)
     events_this_month.extend(finance_events)
 
-    # Progress in-dev projects
+    # Progress in-dev projects via development system
     for p in gs.projects:
         if p.status == "In Dev":
-            speed = sub["speed"]
-            p.progress = min(100, p.progress + random.randint(8, 12) + speed * 2)
-            token_delta = sub["tokens"] * random.randint(100, 300)
-            p.tokens_used += token_delta
-            token_events = finance.consume_tokens(gs, sub["tokens"] * random.randint(1, 3))
-            events_this_month.extend(token_events)
-            if p.progress >= 100:
-                p.status = "Launched"
-                p.launch_date = date_str
-                events_this_month.append(
-                    ("🚀", f"{p.name} launched!", "good", date_str)
-                )
+            dev_events = development.tick_dev_project(gs, p)
+            events_this_month.extend(dev_events)
         elif p.status in ("Launched", "Growing"):
             growth = random.randint(2, 8)
             p.revenue = max(0, p.revenue + growth * 10)

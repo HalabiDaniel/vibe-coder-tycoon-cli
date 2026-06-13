@@ -5,6 +5,15 @@ from typing import Optional
 # ─────────────────────── DATA MODELS ──────────────────────────
 
 @dataclass
+class DevSession:
+    """Transient state for an active development run on a Project."""
+    terminal_log: list = field(default_factory=list)       # last 20 log lines
+    pending_interruption: dict = field(default_factory=dict)  # {} if none active
+    interruption_choice_idx: int = 0
+    action_result: str = ""     # feedback from last dev action
+
+
+@dataclass
 class Loan:
     lender: str
     principal: int
@@ -30,10 +39,23 @@ class Project:
     morale: int
     tokens_used: int
     bug_count: int = 0
-    hype: int = 50
+    hype: int = 30
     tech_debt: int = 0
     launch_date: str = ""
     lifetime_revenue: int = 0
+    # Phase 2 — active development fields
+    design_score: float = 0.0
+    tech_score: float = 0.0
+    quality_score: int = 0
+    qa_level: str = "Skip QA"
+    scope: str = "Standard"
+    budget: int = 500
+    dev_weeks: int = 4
+    dev_day: int = 0
+    dev_total_days: int = 60
+    faked_features: list = field(default_factory=list)
+    paused_dev: bool = False
+    dev_session: Optional[DevSession] = None
 
 
 @dataclass
@@ -112,7 +134,7 @@ class GameState:
     research_progress: dict
     settings: dict
     demo_ended: bool = False
-    schema_version: int = 2
+    schema_version: int = 3
 
     def total_cash(self):
         return sum(c.cash for c in self.companies if c.active)

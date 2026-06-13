@@ -4,7 +4,7 @@ import hashlib
 from typing import Optional
 
 from .constants import SAVE_FILE, MONTH_NAMES, APP_CONFIG_DIR
-from .models import GameState, Founder, Company, Project, Employee, Loan
+from .models import GameState, Founder, Company, Project, Employee, Loan, DevSession
 
 
 # ─────────────────────── CONFIG DIR ───────────────────────────
@@ -81,6 +81,15 @@ def _gs_to_dict(gs: GameState, username: str) -> dict:
         d["loans"] = loans_out
         return d
 
+    def _project_dict(p: Project) -> dict:
+        d = {k: v for k, v in p.__dict__.items() if k != "dev_session"}
+        ds = p.dev_session
+        if ds is not None:
+            d["dev_session"] = ds.__dict__.copy()
+        else:
+            d["dev_session"] = None
+        return d
+
     return {
         "schema_version": gs.schema_version,
         "username": username,
@@ -90,7 +99,7 @@ def _gs_to_dict(gs: GameState, username: str) -> dict:
         "active_ai_sub_idx": gs.active_ai_sub_idx,
         "founder": gs.founder.__dict__ if gs.founder else None,
         "companies": [_company_dict(c) for c in gs.companies],
-        "projects": [p.__dict__ for p in gs.projects],
+        "projects": [_project_dict(p) for p in gs.projects],
         "employees": [e.__dict__ for e in gs.employees],
         "news_feed": gs.news_feed,
         "events": gs.events,
@@ -170,6 +179,23 @@ def _migrate(data: dict) -> dict:
             c.setdefault("cover_from_personal", False)
             c.setdefault("months_negative", 0)
         data["schema_version"] = 2
+    if version < 3:
+        # Phase 2: add project dev fields
+        for p in data.get("projects", []):
+            p.setdefault("design_score", 0.0)
+            p.setdefault("tech_score", 0.0)
+            p.setdefault("quality_score", 0)
+            p.setdefault("qa_level", "Skip QA")
+            p.setdefault("scope", "Standard")
+            p.setdefault("budget", 500)
+            p.setdefault("dev_weeks", 4)
+            p.setdefault("dev_day", 0)
+            p.setdefault("dev_total_days", 60)
+            p.setdefault("faked_features", [])
+            p.setdefault("paused_dev", False)
+            p.setdefault("dev_session", None)
+            p.setdefault("hype", 30)
+        data["schema_version"] = 3
     return data
 
 
@@ -232,7 +258,29 @@ def _dict_to_gs(data: dict) -> GameState:
             months_negative=int(c.get("months_negative", 0)),
         ))
 
-    projects  = [Project(**p) for p in data.get("projects", [])]
+    def _load_project(pd: dict) -> Project:
+        ds_data = pd.pop("dev_session", None)
+        # Remove any keys that aren't Project fields to be forward-compatible
+        known = {
+            "name", "ptype", "model", "stack", "niche", "company_id",
+            "status", "progress", "revenue", "users", "morale", "tokens_used",
+            "bug_count", "hype", "tech_debt", "launch_date", "lifetime_revenue",
+            "design_score", "tech_score", "quality_score", "qa_level", "scope",
+            "budget", "dev_weeks", "dev_day", "dev_total_days",
+            "faked_features", "paused_dev",
+        }
+        clean = {k: v for k, v in pd.items() if k in known}
+        p = Project(**clean)
+        if ds_data and isinstance(ds_data, dict):
+            p.dev_session = DevSession(
+                terminal_log=ds_data.get("terminal_log", []),
+                pending_interruption=ds_data.get("pending_interruption", {}),
+                interruption_choice_idx=ds_data.get("interruption_choice_idx", 0),
+                action_result=ds_data.get("action_result", ""),
+            )
+        return p
+
+    projects  = [_load_project(dict(p)) for p in data.get("projects", [])]
     employees = [Employee(**e) for e in data.get("employees", [])]
     return GameState(
         founder=founder,
