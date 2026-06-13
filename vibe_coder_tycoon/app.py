@@ -7,7 +7,8 @@ from .ui.colors import init_colors, PAIR_TICKER, PAIR_PANEL, PAIR_OVERLAY
 from .ui.helpers import (
     safe_addstr, fill_background, draw_topbar, draw_tabs, draw_statusbar,
 )
-from .ui.screens.title import draw_title_screen, draw_credits, TITLE_MENU
+from .ui.screens.title import draw_title_screen, draw_credits, TITLE_MENU, TITLE_MENU_LOGGED_IN
+from .ui.screens.profile import draw_profile
 from .ui.screens.loading import run_loading_screen
 from .ui.screens.auth import (
     SignInState, SignUpState, draw_sign_in, draw_sign_up,
@@ -134,7 +135,7 @@ def main(stdscr):
 
         # ── DRAW ──────────────────────────────────────────────
         if screen == "title":
-            draw_title_screen(stdscr, title_sel, blink)
+            draw_title_screen(stdscr, title_sel, blink, current_user)
 
         elif screen == "sign_in":
             fill_background(stdscr, PAIR_OVERLAY)
@@ -143,6 +144,10 @@ def main(stdscr):
         elif screen == "sign_up":
             fill_background(stdscr, PAIR_OVERLAY)
             draw_sign_up(stdscr, sign_up_state, blink)
+
+        elif screen == "profile":
+            fill_background(stdscr, PAIR_OVERLAY)
+            draw_profile(stdscr, current_user or "—", cloud_email or "—", pending_cloud_slots)
 
         elif screen == "credits":
             draw_credits(stdscr)
@@ -230,23 +235,122 @@ def main(stdscr):
 
         # ── TITLE SCREEN ──────────────────────────────────────
         if screen == "title":
+            active_menu = TITLE_MENU_LOGGED_IN if current_user else TITLE_MENU
             if key == curses.KEY_UP:
-                title_sel = (title_sel - 1) % len(TITLE_MENU)
+                title_sel = (title_sel - 1) % len(active_menu)
             elif key == curses.KEY_DOWN:
-                title_sel = (title_sel + 1) % len(TITLE_MENU)
+                title_sel = (title_sel + 1) % len(active_menu)
             elif key in (10, curses.KEY_ENTER, ord(' ')):
-                sel_key, sel_label = TITLE_MENU[title_sel]
+                sel_key, sel_label = active_menu[title_sel]
                 if sel_key == "Q":
                     break
                 elif sel_key == "S":
                     sign_in_state = SignInState()
-                    # Change label to Email Address for Supabase auth
                     sign_in_state.fields[0]["label"] = "Email Address"
                     screen = "sign_in"
                 elif sel_key == "C":
                     sign_up_state = SignUpState()
                     screen = "sign_up"
+                elif sel_key == "P":
+                    screen = "profile"
+                elif sel_key == "X":
+                    cloud.sign_out()
+                    cloud_user_id = None
+                    cloud_email = None
+                    current_user = None
+                    cloud_sync_status = ""
+                    gs = None
+                    title_sel = 0
                 elif sel_key == "O":
+                    if current_user:
+                        # Load cloud or local save for logged-in user
+                        if cloud_user_id:
+                            slots, _ = cloud.list_save_slots(cloud_user_id)
+                            pending_cloud_slots = slots or []
+                            if pending_cloud_slots:
+                                save_data, _ = cloud.download_save(pending_cloud_slots[0]["id"])
+                                if save_data:
+                                    gs = gs_from_cloud_data(save_data) or load_game(current_user)
+                                    cloud_sync_status = "synced"
+                                    cloud_last_sync = _now_str()
+                                else:
+                                    gs = load_game(current_user)
+                            else:
+                                gs = load_game(current_user)
+                        else:
+                            gs = load_game(current_user)
+                        if gs is None:
+                            gs = make_new_game(_default_founder(current_user), 0)
+                        run_loading_screen(stdscr)
+                        screen = "game"
+                        active_tab = 0
+                        status_msg = f"Welcome back, {current_user}!"
+                    else:
+                        founder = Founder(
+                            username="OfflineFounder",
+                            background_idx=0,
+                            reputation=20, burnout=0,
+                            skill_prototyping=40, skill_sales=20,
+                            skill_tech=35, skill_management=20,
+                            total_tokens_used=0,
+                        )
+                        gs = make_new_game(founder, 0)
+                        current_user = None
+                        cloud_user_id = None
+                        run_loading_screen(stdscr)
+                        screen = "game"
+                        active_tab = 0
+                        status_msg = "Playing offline. Progress will not be saved."
+                elif sel_key == "T":
+                    screen = "settings_pre"
+                elif sel_key == "R":
+                    screen = "credits"
+            elif key == ord('q') or key == ord('Q'):
+                break
+            elif key == ord('p') or key == ord('P'):
+                if current_user:
+                    screen = "profile"
+            elif key == ord('x') or key == ord('X'):
+                if current_user:
+                    cloud.sign_out()
+                    cloud_user_id = None
+                    cloud_email = None
+                    current_user = None
+                    cloud_sync_status = ""
+                    gs = None
+                    title_sel = 0
+            elif key == ord('s') or key == ord('S'):
+                if not current_user:
+                    sign_in_state = SignInState()
+                    sign_in_state.fields[0]["label"] = "Email Address"
+                    screen = "sign_in"
+            elif key == ord('c') or key == ord('C'):
+                if not current_user:
+                    sign_up_state = SignUpState()
+                    screen = "sign_up"
+            elif key == ord('o') or key == ord('O'):
+                if current_user:
+                    if cloud_user_id:
+                        slots, _ = cloud.list_save_slots(cloud_user_id)
+                        pending_cloud_slots = slots or []
+                        if pending_cloud_slots:
+                            save_data, _ = cloud.download_save(pending_cloud_slots[0]["id"])
+                            if save_data:
+                                gs = gs_from_cloud_data(save_data) or load_game(current_user)
+                                cloud_sync_status = "synced"
+                                cloud_last_sync = _now_str()
+                            else:
+                                gs = load_game(current_user)
+                        else:
+                            gs = load_game(current_user)
+                    else:
+                        gs = load_game(current_user)
+                    if gs is None:
+                        gs = make_new_game(_default_founder(current_user), 0)
+                    run_loading_screen(stdscr)
+                    screen = "game"
+                    status_msg = f"Welcome back, {current_user}!"
+                else:
                     founder = Founder(
                         username="OfflineFounder",
                         background_idx=0,
@@ -260,36 +364,7 @@ def main(stdscr):
                     cloud_user_id = None
                     run_loading_screen(stdscr)
                     screen = "game"
-                    active_tab = 0
-                    status_msg = "Playing offline. Progress will not be saved."
-                elif sel_key == "T":
-                    screen = "settings_pre"
-                elif sel_key == "R":
-                    screen = "credits"
-            elif key == ord('q') or key == ord('Q'):
-                break
-            elif key == ord('s') or key == ord('S'):
-                sign_in_state = SignInState()
-                sign_in_state.fields[0]["label"] = "Email Address"
-                screen = "sign_in"
-            elif key == ord('c') or key == ord('C'):
-                sign_up_state = SignUpState()
-                screen = "sign_up"
-            elif key == ord('o') or key == ord('O'):
-                founder = Founder(
-                    username="OfflineFounder",
-                    background_idx=0,
-                    reputation=20, burnout=0,
-                    skill_prototyping=40, skill_sales=20,
-                    skill_tech=35, skill_management=20,
-                    total_tokens_used=0,
-                )
-                gs = make_new_game(founder, 0)
-                current_user = None
-                cloud_user_id = None
-                run_loading_screen(stdscr)
-                screen = "game"
-                status_msg = "Playing offline."
+                    status_msg = "Playing offline."
             elif key == ord('r') or key == ord('R'):
                 screen = "credits"
             elif key == ord('t') or key == ord('T'):
@@ -489,6 +564,11 @@ def main(stdscr):
 
         # ── CREDITS ───────────────────────────────────────────
         elif screen == "credits":
+            if key in (27, 10, curses.KEY_ENTER, ord('q'), ord('Q')):
+                screen = "title"
+
+        # ── PROFILE ───────────────────────────────────────────
+        elif screen == "profile":
             if key in (27, 10, curses.KEY_ENTER, ord('q'), ord('Q')):
                 screen = "title"
 

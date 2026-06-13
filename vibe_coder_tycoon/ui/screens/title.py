@@ -1,5 +1,6 @@
 import curses
 import time
+from typing import Optional
 
 from ..colors import *
 from ..helpers import *
@@ -42,7 +43,16 @@ TITLE_MENU = [
     ("Q", "Exit"),
 ]
 
-def draw_title_screen(win, sel: int, blink: bool):
+TITLE_MENU_LOGGED_IN = [
+    ("P", "Profile"),
+    ("O", "Play"),
+    ("X", "Sign Out"),
+    ("T", "Settings"),
+    ("R", "Credits"),
+    ("Q", "Exit"),
+]
+
+def draw_title_screen(win, sel: int, blink: bool, current_user: Optional[str] = None):
     h, w = win.getmaxyx()
     fill_background(win, PAIR_MENU_OVERLAY)
 
@@ -90,18 +100,26 @@ def draw_title_screen(win, sel: int, blink: bool):
     center_text(win, logo_y, ver_line, curses.color_pair(PAIR_MENU_BORDER))
     logo_y += 2
 
+    # ── Logged-in badge ──
+    menu = TITLE_MENU_LOGGED_IN if current_user else TITLE_MENU
+    if current_user:
+        badge = f" ● Signed in as {current_user} "
+        center_text(win, logo_y, badge,
+                    curses.color_pair(PAIR_MENU_ACCENT) | curses.A_BOLD)
+        logo_y += 2
+
     # Menu — framed panel with full-width selection bars
     item_w  = 32                 # inner width of each menu row
     box_w   = item_w + 4         # padding + borders
     box_x   = max(1, (w - box_w) // 2)
     box_y   = logo_y
-    box_h   = len(TITLE_MENU) + 2
+    box_h   = len(menu) + 2
 
     draw_box(win, box_y, box_x, box_h, box_w, PAIR_MENU_BORDER,
              "MAIN MENU", PAIR_MENU_TITLE)
 
     bar_x = box_x + 2
-    for i, (key, label) in enumerate(TITLE_MENU):
+    for i, (key, label) in enumerate(menu):
         row_y  = box_y + 1 + i
         is_sel = (i == sel)
         if is_sel:
