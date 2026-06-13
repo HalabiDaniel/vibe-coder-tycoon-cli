@@ -41,7 +41,10 @@ from .constants import (
     EMPLOYEE_ROLES, EMPLOYEE_TRAITS, RESEARCH_CATEGORIES,
     COMPANY_LEGAL_STYLES, COMPANY_FOCUS_AREAS, FUNDING_STYLES, RISK_APPETITES,
     PROJECT_TYPES, TECH_STACKS, NICHES, AUTO_DEPOSIT_CYCLE, FEATURE_SCOPES, QA_OPTIONS,
-    AUTO_UPDATE_CYCLES,
+    AUTO_UPDATE_CYCLES, OFFICE_LEVELS,
+)
+from .engine.systems.companies import (
+    can_build_project_type, get_office_employee_cap, get_focus_data,
 )
 
 
@@ -825,6 +828,26 @@ def main(stdscr):
                                               company_id=sel_c.id)
                             companies_ui.message = ("✓ " if result.ok else "✗ ") + result.message
                             status_msg = result.message
+                        elif key in (ord('o'), ord('O')):
+                            result = dispatch(gs, "upgrade_office",
+                                              company_id=sel_c.id)
+                            companies_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                        elif key in (ord('l'), ord('L')):
+                            result = dispatch(gs, "upgrade_legal",
+                                              company_id=sel_c.id)
+                            companies_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                        elif key in (ord('h'), ord('H')):
+                            focus_d = get_focus_data(sel_c.focus_area)
+                            if focus_d and focus_d["name"] == "Holding Company":
+                                companies_ui.view = "holding"
+                            else:
+                                companies_ui.message = "✗ Only Holding Company focus has a holding view."
+
+                elif companies_ui.view == "holding":
+                    if key == 27:
+                        companies_ui.view = "list"
 
                 elif companies_ui.view == "new":
                     if key == 27:
@@ -1011,22 +1034,28 @@ def main(stdscr):
                              "Lena Chen", "Rafi Hassan", "Suki Park", "Omar Ali"]
                     if gs.active_companies():
                         cid = gs.active_companies()[0].id
-                        emp = Employee(
-                            name=random.choice(names),
-                            role=random.choice(EMPLOYEE_ROLES),
-                            level=1,
-                            salary=random.randint(1500, 3500),
-                            mood=random.randint(70, 90),
-                            skill=random.randint(40, 65),
-                            hired_year=gs.year,
-                            company_id=cid,
-                            trait=random.choice(EMPLOYEE_TRAITS),
-                        )
-                        gs.employees.append(emp)
                         c = gs.company_by_id(cid)
-                        if c:
-                            c.monthly_expenses += emp.salary
-                        status_msg = f"Hired {emp.name} as {emp.role}!"
+                        # Phase 4: enforce office employee cap
+                        emp_count = len(gs.employees_for_company(cid))
+                        emp_cap = get_office_employee_cap(c) if c else 2
+                        if emp_count >= emp_cap:
+                            status_msg = f"✗ Office full ({emp_count}/{emp_cap}). Upgrade office (O) to hire more."
+                        else:
+                            emp = Employee(
+                                name=random.choice(names),
+                                role=random.choice(EMPLOYEE_ROLES),
+                                level=1,
+                                salary=random.randint(1500, 3500),
+                                mood=random.randint(70, 90),
+                                skill=random.randint(40, 65),
+                                hired_year=gs.year,
+                                company_id=cid,
+                                trait=random.choice(EMPLOYEE_TRAITS),
+                            )
+                            gs.employees.append(emp)
+                            if c:
+                                c.monthly_expenses += emp.salary
+                            status_msg = f"Hired {emp.name} as {emp.role}!"
 
             elif tab == "Research":
                 if key == curses.KEY_UP:
@@ -1229,7 +1258,16 @@ def _handle_new_project_keys(key, ui: ProjectsUIState, gs: GameState, status_msg
             except: dev_weeks = 4
             scope_data = FEATURE_SCOPES.get(scope, FEATURE_SCOPES["Standard"])
             active   = gs.active_companies()
-            cid      = active[ui.new_company_idx].id if active else 0
+            company  = active[ui.new_company_idx] if active else None
+            cid      = company.id if company else 0
+
+            # Phase 4: enforce focus restrictions
+            if company:
+                allowed, reason = can_build_project_type(company, ptype)
+                if not allowed:
+                    ui.message = f"✗ {reason}"
+                    return
+
             p = Project(
                 name=name, ptype=ptype, model=sub_name, stack=stack, niche=niche,
                 company_id=cid, status="In Dev", progress=0,

@@ -14,6 +14,7 @@ from .actions import dispatch, ActionResult  # noqa: F401 — re-exported
 from .systems import finance        # registers finance actions as a side-effect
 from .systems import development    # registers dev actions as a side-effect
 from .systems import products       # registers product actions as a side-effect
+from .systems import companies      # registers company/office actions as a side-effect
 
 
 def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
@@ -21,7 +22,7 @@ def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
     c = Company(
         id=0,
         name=f"{founder.username}'s First Venture",
-        legal_style="Solo Hustle",
+        legal_style="Sole Proprietorship",
         focus_area="AI Tools",
         funding_style="Bootstrapped",
         risk_appetite="Balanced",

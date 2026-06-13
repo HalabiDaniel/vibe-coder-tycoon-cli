@@ -12,6 +12,7 @@ from ...constants import (
 from ...models import GameState, Project
 from ..actions import register, ActionResult
 from .finance import adjust_reputation, add_vibe, consume_tokens
+from .companies import get_focus_data
 
 
 # ─────────────────────── LAUNCH RESOLUTION ────────────────────
@@ -101,9 +102,14 @@ def monthly_product_tick(gs: GameState, p: Project, date_str: str) -> list:
         p.active_users = max(0, p.active_users + int(p.active_users * net_pct))
     p.users = p.active_users
 
-    # Revenue from current user base × obsolescence factor
+    # Phase 4: focus revenue bonus for the project's company
+    company = gs.company_by_id(p.company_id)
+    focus = get_focus_data(company.focus_area) if company else None
+    focus_rev_mult = focus["revenue_mult"] if focus else 1.0
+
+    # Revenue from current user base × obsolescence × focus bonus
     base_rev = _calc_revenue_from_users(p)
-    p.revenue = max(0, int(base_rev * obso))
+    p.revenue = max(0, int(base_rev * obso * focus_rev_mult))
     p.lifetime_revenue += p.revenue
 
     p.revenue_history.append(p.revenue)

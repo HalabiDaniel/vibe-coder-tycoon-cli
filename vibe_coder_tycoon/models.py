@@ -109,6 +109,9 @@ class Company:
     auto_deposit_pct: int = 0
     cover_from_personal: bool = False
     months_negative: int = 0
+    # Phase 4
+    parent_company_id: int = -1
+    history: list = field(default_factory=list)
 
 
 @dataclass
@@ -146,7 +149,7 @@ class GameState:
     research_progress: dict
     settings: dict
     demo_ended: bool = False
-    schema_version: int = 4
+    schema_version: int = 5
 
     def total_cash(self):
         return sum(c.cash for c in self.companies if c.active)

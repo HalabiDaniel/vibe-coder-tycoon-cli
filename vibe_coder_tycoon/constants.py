@@ -95,14 +95,169 @@ NICHES = [
     "Content Creation", "B2B Automation",
 ]
 
-COMPANY_LEGAL_STYLES = [
-    "Solo Hustle", "Tiny Studio", "Indie Lab",
-    "Garage Startup", "Growth Startup", "Holding Company", "Mega Corp",
+# Phase 4 — Legal structures (GDD-aligned with unlock conditions and effects)
+COMPANY_LEGAL_STRUCTURES = [
+    {
+        "name": "Sole Proprietorship", "short": "Sole Prop",
+        "desc": "Just you and a dream. Zero overhead, total control.",
+        "unlock_cash": 0, "unlock_research": None,
+        "expense_mult": 0.9, "revenue_mult": 1.0,
+        "vc_eligible": False, "ipo_eligible": False,
+    },
+    {
+        "name": "LLC", "short": "LLC",
+        "desc": "Limited liability. Credible enough for angel investors.",
+        "unlock_cash": 2000, "unlock_research": None,
+        "expense_mult": 1.0, "revenue_mult": 1.0,
+        "vc_eligible": False, "ipo_eligible": False,
+    },
+    {
+        "name": "Partnership", "short": "Partnership",
+        "desc": "Co-founder structure. Shared risk, shared glory.",
+        "unlock_cash": 1000, "unlock_research": None,
+        "expense_mult": 1.0, "revenue_mult": 1.05,
+        "vc_eligible": False, "ipo_eligible": False,
+    },
+    {
+        "name": "C-Corporation", "short": "C-Corp",
+        "desc": "Investment-grade. Can take VC money and issue shares.",
+        "unlock_cash": 15000, "unlock_research": "Cap Table Basics",
+        "expense_mult": 1.15, "revenue_mult": 1.1,
+        "vc_eligible": True, "ipo_eligible": True,
+    },
+    {
+        "name": "Public Company", "short": "Public",
+        "desc": "Listed on the exchange. Shareholders, earnings calls, chaos.",
+        "unlock_cash": 100000, "unlock_research": "Cap Table Basics",
+        "expense_mult": 1.3, "revenue_mult": 1.25,
+        "vc_eligible": True, "ipo_eligible": True,
+    },
 ]
 
-COMPANY_FOCUS_AREAS = [
-    "AI Tools", "SaaS", "Mobile Apps", "Games", "Developer Tools",
-    "Automation", "Education", "Content Tools", "Weird Internet Products",
+# Derived list for backward-compat wizard display
+COMPANY_LEGAL_STYLES = [s["name"] for s in COMPANY_LEGAL_STRUCTURES]
+
+# Phase 4 — Company focuses (GDD-aligned with can-build sets and bonuses)
+COMPANY_FOCUSES = [
+    {
+        "name": "AI Tools",
+        "desc": "AI-powered products. Token cost bonus, faster iteration.",
+        "can_build": ["AI Wrapper", "SaaS Web App", "Developer Tool", "API / Backend", "Browser Extension"],
+        "dev_speed_mult": 1.1, "token_cost_mult": 0.85,
+        "revenue_mult": 1.0, "hype_mult": 1.0,
+        "synergy_with": "Infrastructure",
+    },
+    {
+        "name": "SaaS",
+        "desc": "Subscription software. Recurring revenue focus.",
+        "can_build": ["SaaS Web App", "API / Backend", "Developer Tool", "Browser Extension", "Discord Bot"],
+        "dev_speed_mult": 1.0, "token_cost_mult": 1.0,
+        "revenue_mult": 1.1, "hype_mult": 1.0,
+        "synergy_with": None,
+    },
+    {
+        "name": "Games",
+        "desc": "Ship games. High hype potential, volatile revenue.",
+        "can_build": ["Mobile App", "Browser Extension", "Discord Bot", "No-Code Template"],
+        "dev_speed_mult": 0.9, "token_cost_mult": 1.0,
+        "revenue_mult": 0.95, "hype_mult": 1.25,
+        "synergy_with": None,
+    },
+    {
+        "name": "Agency",
+        "desc": "Client work and templates. Steady cash, less glory.",
+        "can_build": ["No-Code Template", "SaaS Web App", "Mobile App", "Browser Extension", "Content Platform"],
+        "dev_speed_mult": 1.05, "token_cost_mult": 1.0,
+        "revenue_mult": 1.05, "hype_mult": 0.85,
+        "synergy_with": None,
+    },
+    {
+        "name": "Enterprise",
+        "desc": "B2B software. Long sales cycles, large contracts.",
+        "can_build": ["SaaS Web App", "API / Backend", "Developer Tool", "CLI Tool"],
+        "dev_speed_mult": 0.85, "token_cost_mult": 1.1,
+        "revenue_mult": 1.2, "hype_mult": 0.8,
+        "synergy_with": None,
+    },
+    {
+        "name": "Infrastructure",
+        "desc": "DevTools, APIs, and platform services. Unglamorous but profitable.",
+        "can_build": ["CLI Tool", "API / Backend", "Developer Tool", "SaaS Web App"],
+        "dev_speed_mult": 1.0, "token_cost_mult": 0.9,
+        "revenue_mult": 1.0, "hype_mult": 0.8,
+        "synergy_with": "AI Tools",
+    },
+    {
+        "name": "Holding Company",
+        "desc": "Owns other companies. No products — pure control and synergies.",
+        "can_build": [],
+        "dev_speed_mult": 1.0, "token_cost_mult": 1.0,
+        "revenue_mult": 1.0, "hype_mult": 1.0,
+        "synergy_with": None,
+    },
+    {
+        "name": "Content Tools",
+        "desc": "Creator economy. High hype, ad-based revenue.",
+        "can_build": ["Content Platform", "Mobile App", "Browser Extension", "Discord Bot", "No-Code Template"],
+        "dev_speed_mult": 1.0, "token_cost_mult": 1.0,
+        "revenue_mult": 1.0, "hype_mult": 1.15,
+        "synergy_with": None,
+    },
+]
+
+# Derived list for backward-compat wizard display
+COMPANY_FOCUS_AREAS = [f["name"] for f in COMPANY_FOCUSES]
+
+# Phase 4 — Office levels with employee caps and role unlocks
+OFFICE_LEVELS = [
+    {
+        "level": 1, "name": "Home Office",
+        "max_employees": 2,
+        "upgrade_cost": 3000,
+        "unlocked_roles": ["Vibe Coder", "Prompt Engineer"],
+    },
+    {
+        "level": 2, "name": "Shared Desk",
+        "max_employees": 4,
+        "upgrade_cost": 8000,
+        "unlocked_roles": ["Frontend Dev", "Backend Dev"],
+    },
+    {
+        "level": 3, "name": "Small Office",
+        "max_employees": 6,
+        "upgrade_cost": 20000,
+        "unlocked_roles": ["Bug Hunter", "Growth Goblin"],
+    },
+    {
+        "level": 4, "name": "Real Office",
+        "max_employees": 10,
+        "upgrade_cost": 50000,
+        "unlocked_roles": ["Pixel Artist", "Community Wizard"],
+    },
+    {
+        "level": 5, "name": "Open-Plan HQ",
+        "max_employees": 15,
+        "upgrade_cost": 120000,
+        "unlocked_roles": ["Finance Gremlin"],
+    },
+    {
+        "level": 6, "name": "Mid-Size HQ",
+        "max_employees": 20,
+        "upgrade_cost": 300000,
+        "unlocked_roles": ["Operations Goblin"],
+    },
+    {
+        "level": 7, "name": "Campus",
+        "max_employees": 40,
+        "upgrade_cost": 800000,
+        "unlocked_roles": [],
+    },
+    {
+        "level": 8, "name": "Mega HQ",
+        "max_employees": 100,
+        "upgrade_cost": 0,
+        "unlocked_roles": [],
+    },
 ]
 
 FUNDING_STYLES = [

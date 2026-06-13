@@ -211,6 +211,12 @@ def _migrate(data: dict) -> dict:
             p.setdefault("discontinued", False)
             p.setdefault("revenue_history", [])
         data["schema_version"] = 4
+    if version < 5:
+        # Phase 4: add company system fields
+        for c in data.get("companies", []):
+            c.setdefault("parent_company_id", -1)
+            c.setdefault("history", [])
+        data["schema_version"] = 5
     return data
 
 
@@ -271,6 +277,8 @@ def _dict_to_gs(data: dict) -> GameState:
             auto_deposit_pct=int(c.get("auto_deposit_pct", 0)),
             cover_from_personal=bool(c.get("cover_from_personal", False)),
             months_negative=int(c.get("months_negative", 0)),
+            parent_company_id=int(c.get("parent_company_id", -1)),
+            history=list(c.get("history", [])),
         ))
 
     def _load_project(pd: dict) -> Project:

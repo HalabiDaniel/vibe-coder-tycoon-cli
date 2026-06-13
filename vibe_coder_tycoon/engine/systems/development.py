@@ -12,6 +12,7 @@ from ...constants import (
 from ...models import GameState, DevSession
 from ..actions import register, ActionResult
 from .finance import consume_tokens, adjust_reputation, add_vibe, get_vibe_multiplier
+from .companies import get_focus_data, get_synergy_bonus
 
 
 # ─────────────────────── SESSION LIFECYCLE ────────────────────
@@ -67,6 +68,14 @@ def tick_dev_project(gs: GameState, p) -> list:
     vibe_mult = get_vibe_multiplier(gs)
     scope_data = FEATURE_SCOPES.get(p.scope, FEATURE_SCOPES["Standard"])
 
+    # Phase 4: focus bonuses for the project's company
+    company = gs.company_by_id(p.company_id)
+    focus = get_focus_data(company.focus_area) if company else None
+    dev_speed_mult = focus["dev_speed_mult"] if focus else 1.0
+    token_cost_mult = focus["token_cost_mult"] if focus else 1.0
+    if company:
+        token_cost_mult *= get_synergy_bonus(gs, company)
+
     days_this_month = 28 + random.randint(-3, 5)
     interrupted = False
 
@@ -76,9 +85,9 @@ def tick_dev_project(gs: GameState, p) -> list:
 
         p.dev_day += 1
 
-        # Design + tech score gain per day
-        design_gain = (sub["quality"] * 15.0 / p.dev_total_days) * vibe_mult * random.uniform(0.7, 1.3)
-        tech_gain   = (sub["quality"] * 14.0 / p.dev_total_days)               * random.uniform(0.7, 1.3)
+        # Design + tech score gain per day (boosted by focus dev_speed_mult)
+        design_gain = (sub["quality"] * 15.0 / p.dev_total_days) * vibe_mult * dev_speed_mult * random.uniform(0.7, 1.3)
+        tech_gain   = (sub["quality"] * 14.0 / p.dev_total_days) * dev_speed_mult             * random.uniform(0.7, 1.3)
         p.design_score = min(100.0, p.design_score + design_gain)
         p.tech_score   = min(100.0, p.tech_score   + tech_gain)
 
@@ -86,8 +95,8 @@ def tick_dev_project(gs: GameState, p) -> list:
         if random.random() < sub["bug_risk"] * vibe_mult * 0.03:
             p.bug_count += 1
 
-        # Token consumption per day
-        token_day = max(1, int(scope_data["token_mult"] * sub["tokens"] * random.uniform(0.5, 1.5)))
+        # Token consumption per day (reduced by focus token_cost_mult)
+        token_day = max(1, int(scope_data["token_mult"] * sub["tokens"] * token_cost_mult * random.uniform(0.5, 1.5)))
         consume_tokens(gs, token_day)
         p.tokens_used += token_day
 
