@@ -1,12 +1,20 @@
+"""
+Engine package — public API: make_new_game, advance_month, dispatch.
+
+Import paths that existed before (from .engine import ...) still work because
+this package's __init__.py re-exports the same names.
+"""
+
 import random
 
-from .constants import AI_SUBS, BACKGROUNDS, MONTH_NAMES
-from .models import GameState, Founder, Company, Project, Employee
-from .persistence import default_settings
+from ..constants import AI_SUBS, BACKGROUNDS, MONTH_NAMES
+from ..models import GameState, Founder, Company, Project, Employee
+from ..persistence import default_settings
+from .actions import dispatch, ActionResult  # noqa: F401 — re-exported
+from .systems import finance  # registers finance actions as a side-effect
 
 
 def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
-    bg = BACKGROUNDS[founder.background_idx]
     starting_cash = 5000
     c = Company(
         id=0,
@@ -43,6 +51,7 @@ def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
     )
     return gs
 
+
 def make_initial_news():
     return [
         {"icon": "📡", "headline": "AI funding hits record high — $40B deployed in Q4 2024",
@@ -66,31 +75,28 @@ def advance_month(gs: GameState) -> str:
     gs.months_elapsed += 1
 
     sub = AI_SUBS[gs.active_ai_sub_idx]
+    date_str = f"{MONTH_NAMES[gs.month - 1]} {gs.year}"
     events_this_month = []
 
-    # Apply company financials
-    for c in gs.active_companies():
-        c.cash += c.monthly_revenue - c.monthly_expenses
-        c.cash = max(0, c.cash)
-        c.valuation = c.cash + c.monthly_revenue * 12
-        if c.cash == 0:
-            events_this_month.append(
-                ("💸", f"{c.name} ran out of cash!", "bad",
-                 f"{MONTH_NAMES[gs.month-1]} {gs.year}"))
+    # Finance settlement (Phase 1): replaces the old inline cash loop
+    finance_events = finance.monthly_settlement(gs)
+    events_this_month.extend(finance_events)
 
     # Progress in-dev projects
     for p in gs.projects:
         if p.status == "In Dev":
             speed = sub["speed"]
             p.progress = min(100, p.progress + random.randint(8, 12) + speed * 2)
-            p.tokens_used += sub["tokens"] * random.randint(100, 300)
-            gs.founder.total_tokens_used += sub["tokens"] * random.randint(1, 3)
+            token_delta = sub["tokens"] * random.randint(100, 300)
+            p.tokens_used += token_delta
+            token_events = finance.consume_tokens(gs, sub["tokens"] * random.randint(1, 3))
+            events_this_month.extend(token_events)
             if p.progress >= 100:
                 p.status = "Launched"
-                p.launch_date = f"{MONTH_NAMES[gs.month-1]} {gs.year}"
+                p.launch_date = date_str
                 events_this_month.append(
-                    ("🚀", f"{p.name} launched!", "good",
-                     f"{MONTH_NAMES[gs.month-1]} {gs.year}"))
+                    ("🚀", f"{p.name} launched!", "good", date_str)
+                )
         elif p.status in ("Launched", "Growing"):
             growth = random.randint(2, 8)
             p.revenue = max(0, p.revenue + growth * 10)
@@ -98,8 +104,9 @@ def advance_month(gs: GameState) -> str:
             p.lifetime_revenue += p.revenue
             c = gs.company_by_id(p.company_id)
             if c:
-                c.monthly_revenue = sum(proj.revenue for proj in gs.projects
-                                        if proj.company_id == c.id)
+                c.monthly_revenue = sum(
+                    proj.revenue for proj in gs.projects if proj.company_id == c.id
+                )
             if p.revenue > 1000 and p.status == "Launched":
                 p.status = "Growing"
 
@@ -108,29 +115,29 @@ def advance_month(gs: GameState) -> str:
     gs.founder.burnout = max(0, min(100, gs.founder.burnout + burnout_delta))
     if gs.founder.burnout > 80:
         events_this_month.append(
-            ("⚠️", "Founder burnout critical! Take a rest.", "bad",
-             f"{MONTH_NAMES[gs.month-1]} {gs.year}"))
+            ("⚠️", "Founder burnout critical! Take a rest.", "bad", date_str)
+        )
 
     # Reputation drift
-    gs.founder.reputation = max(0, min(100, gs.founder.reputation + random.randint(-1, 3)))
+    finance.adjust_reputation(gs, random.randint(-1, 3))
 
     # Employee mood drift
     for emp in gs.employees:
         emp.mood = max(0, min(100, emp.mood + random.randint(-4, 4)))
         emp.productivity = max(0, min(100, emp.productivity + random.randint(-3, 3)))
 
-    # Random news event
+    # Random news
     random_news = [
         {"icon": "📰", "headline": "AI token costs drop 15% — good time to prototype",
-         "category": "Market", "date": f"{MONTH_NAMES[gs.month-1]} {gs.year}", "effect": None},
+         "category": "Market", "date": date_str, "effect": None},
         {"icon": "⚠️",  "headline": "Market sentiment sours on consumer AI tools",
-         "category": "Market", "date": f"{MONTH_NAMES[gs.month-1]} {gs.year}", "effect": None},
+         "category": "Market", "date": date_str, "effect": None},
         {"icon": "🔥",  "headline": "IndieScroll trending: solo builders hit 10K MRR",
-         "category": "Community", "date": f"{MONTH_NAMES[gs.month-1]} {gs.year}", "effect": None},
+         "category": "Community", "date": date_str, "effect": None},
         {"icon": "💡",  "headline": "New open-source stack released — consider switching",
-         "category": "Tools", "date": f"{MONTH_NAMES[gs.month-1]} {gs.year}", "effect": None},
+         "category": "Tools", "date": date_str, "effect": None},
         {"icon": "💸",  "headline": "Angel round closed: $500K into micro-SaaS",
-         "category": "Funding", "date": f"{MONTH_NAMES[gs.month-1]} {gs.year}", "effect": None},
+         "category": "Funding", "date": date_str, "effect": None},
     ]
     gs.news_feed.insert(0, random.choice(random_news))
     gs.news_feed = gs.news_feed[:20]
@@ -138,6 +145,9 @@ def advance_month(gs: GameState) -> str:
     gs.events = events_this_month + gs.events
     gs.events = gs.events[:20]
 
-    date_str = f"{MONTH_NAMES[gs.month-1]} {gs.year}"
-    return f"Month advanced to {date_str}. Cash: ${gs.total_cash():,}  Burnout: {gs.founder.burnout}%"
-
+    return (
+        f"Month advanced to {date_str}. "
+        f"Personal: ${gs.founder.personal_cash:,.0f}  "
+        f"Tokens: {gs.founder.total_tokens_used:,}K  "
+        f"Vibe: {gs.founder.vibe:.0f}"
+    )

@@ -33,13 +33,13 @@ from .persistence import (
     compute_checksum, add_to_sync_queue, flush_sync_queue,
     gs_from_cloud_data, save_game_from_cloud,
 )
-from .engine import make_new_game, advance_month
+from .engine import make_new_game, advance_month, dispatch
 from .cloud import CloudService
 from .constants import (
     TABS, BACKGROUNDS, AI_SUBS, DEMO_MONTH_LIMIT, MONTH_NAMES,
     EMPLOYEE_ROLES, EMPLOYEE_TRAITS, RESEARCH_CATEGORIES,
     COMPANY_LEGAL_STYLES, COMPANY_FOCUS_AREAS, FUNDING_STYLES, RISK_APPETITES,
-    PROJECT_TYPES, TECH_STACKS, NICHES,
+    PROJECT_TYPES, TECH_STACKS, NICHES, AUTO_DEPOSIT_CYCLE,
 )
 
 
@@ -792,12 +792,65 @@ def main(stdscr):
                         companies_ui.view = "new"
                         companies_ui.message = ""
                     elif key in (10, curses.KEY_ENTER):
-                        companies_ui.view = "detail"
-                elif companies_ui.view in ("detail", "new"):
+                        pass  # stay in list; detail is inline below
+                    elif gs.companies and 0 <= companies_ui.selected < len(gs.companies):
+                        sel_c = gs.companies[companies_ui.selected]
+                        if key in (ord('d'), ord('D')):
+                            companies_ui.view = "deposit"
+                            companies_ui.finance_amount = ""
+                            companies_ui.message = ""
+                        elif key in (ord('w'), ord('W')):
+                            companies_ui.view = "withdraw"
+                            companies_ui.finance_amount = ""
+                            companies_ui.message = ""
+                        elif key in (ord('t'), ord('T')):
+                            cur = sel_c.auto_deposit_pct
+                            try:
+                                idx = AUTO_DEPOSIT_CYCLE.index(cur)
+                            except ValueError:
+                                idx = 0
+                            new_pct = AUTO_DEPOSIT_CYCLE[(idx + 1) % len(AUTO_DEPOSIT_CYCLE)]
+                            result = dispatch(gs, "set_auto_deposit",
+                                              company_id=sel_c.id, pct=new_pct)
+                            companies_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                        elif key in (ord('c'), ord('C')):
+                            result = dispatch(gs, "toggle_cover_personal",
+                                              company_id=sel_c.id)
+                            companies_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+
+                elif companies_ui.view == "new":
                     if key == 27:
                         companies_ui.view = "list"
-                    elif companies_ui.view == "new":
+                    else:
                         _handle_new_company_keys(key, companies_ui, gs)
+
+                elif companies_ui.view in ("deposit", "withdraw"):
+                    if key == 27:
+                        companies_ui.view = "list"
+                        companies_ui.message = ""
+                    elif key in (curses.KEY_BACKSPACE, 127, 8):
+                        companies_ui.finance_amount = companies_ui.finance_amount[:-1]
+                    elif 48 <= key <= 57:  # digits 0-9
+                        if len(companies_ui.finance_amount) < 10:
+                            companies_ui.finance_amount += chr(key)
+                    elif key in (10, curses.KEY_ENTER):
+                        try:
+                            amount = int(companies_ui.finance_amount or "0")
+                        except ValueError:
+                            amount = 0
+                        if amount <= 0:
+                            companies_ui.message = "✗ Enter a positive amount."
+                        elif gs.companies and 0 <= companies_ui.selected < len(gs.companies):
+                            cid = gs.companies[companies_ui.selected].id
+                            action = ("deposit_to_company" if companies_ui.view == "deposit"
+                                      else "withdraw_to_personal")
+                            result = dispatch(gs, action, company_id=cid, amount=amount)
+                            companies_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                            if result.ok:
+                                companies_ui.view = "list"
 
             elif tab == "Projects":
                 if projects_ui.view == "list":

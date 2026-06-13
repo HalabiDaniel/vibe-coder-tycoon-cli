@@ -4,7 +4,7 @@ import hashlib
 from typing import Optional
 
 from .constants import SAVE_FILE, MONTH_NAMES, APP_CONFIG_DIR
-from .models import GameState, Founder, Company, Project, Employee
+from .models import GameState, Founder, Company, Project, Employee, Loan
 
 
 # ─────────────────────── CONFIG DIR ───────────────────────────
@@ -73,6 +73,14 @@ def flush_sync_queue(cloud_service, user_id: str):
 # ─────────────────────── SAVE / LOAD ──────────────────────────
 
 def _gs_to_dict(gs: GameState, username: str) -> dict:
+    def _company_dict(c: Company) -> dict:
+        d = {k: v for k, v in c.__dict__.items() if k != "loans"}
+        loans_out = []
+        for loan in c.loans:
+            loans_out.append(loan.__dict__ if isinstance(loan, Loan) else loan)
+        d["loans"] = loans_out
+        return d
+
     return {
         "schema_version": gs.schema_version,
         "username": username,
@@ -81,7 +89,7 @@ def _gs_to_dict(gs: GameState, username: str) -> dict:
         "months_elapsed": gs.months_elapsed,
         "active_ai_sub_idx": gs.active_ai_sub_idx,
         "founder": gs.founder.__dict__ if gs.founder else None,
-        "companies": [c.__dict__ for c in gs.companies],
+        "companies": [_company_dict(c) for c in gs.companies],
         "projects": [p.__dict__ for p in gs.projects],
         "employees": [e.__dict__ for e in gs.employees],
         "news_feed": gs.news_feed,
@@ -146,10 +154,84 @@ def save_game_from_cloud(username: str, save_data: dict):
     except Exception:
         pass
 
+def _migrate(data: dict) -> dict:
+    """Upgrade save data from older schema versions in place."""
+    version = data.get("schema_version", 1)
+    if version < 2:
+        # Phase 1: add founder resource fields
+        fd = data.get("founder") or {}
+        fd.setdefault("personal_cash", 1000.0)
+        fd.setdefault("vibe", 50.0)
+        fd.setdefault("sanity", 100)
+        data["founder"] = fd
+        # Phase 1: add company finance fields
+        for c in data.get("companies", []):
+            c.setdefault("auto_deposit_pct", 0)
+            c.setdefault("cover_from_personal", False)
+            c.setdefault("months_negative", 0)
+        data["schema_version"] = 2
+    return data
+
+
 def _dict_to_gs(data: dict) -> GameState:
+    data = _migrate(data)
+
     fd = data.get("founder")
-    founder = Founder(**fd) if fd else None
-    companies = [Company(**c) for c in data.get("companies", [])]
+    if fd:
+        founder = Founder(
+            username=fd["username"],
+            background_idx=fd["background_idx"],
+            reputation=fd["reputation"],
+            burnout=fd["burnout"],
+            skill_prototyping=fd["skill_prototyping"],
+            skill_sales=fd["skill_sales"],
+            skill_tech=fd["skill_tech"],
+            skill_management=fd["skill_management"],
+            total_tokens_used=fd.get("total_tokens_used", 0),
+            achievements=fd.get("achievements", []),
+            career_history=fd.get("career_history", []),
+            unlocked_research=fd.get("unlocked_research", []),
+            personal_cash=float(fd.get("personal_cash", 1000.0)),
+            vibe=float(fd.get("vibe", 50.0)),
+            sanity=int(fd.get("sanity", 100)),
+        )
+    else:
+        founder = None
+
+    companies = []
+    for c in data.get("companies", []):
+        raw_loans = c.get("loans", [])
+        loans = []
+        for ln in raw_loans:
+            if isinstance(ln, dict) and "principal" in ln:
+                try:
+                    loans.append(Loan(**ln))
+                except TypeError:
+                    pass  # skip malformed loan entries
+        companies.append(Company(
+            id=c["id"],
+            name=c["name"],
+            legal_style=c["legal_style"],
+            focus_area=c["focus_area"],
+            funding_style=c["funding_style"],
+            risk_appetite=c["risk_appetite"],
+            cash=c["cash"],
+            monthly_revenue=c["monthly_revenue"],
+            monthly_expenses=c["monthly_expenses"],
+            debt=c["debt"],
+            reputation=c["reputation"],
+            valuation=c["valuation"],
+            office_level=c["office_level"],
+            mood=c["mood"],
+            founded_month=c["founded_month"],
+            founded_year=c["founded_year"],
+            active=c.get("active", True),
+            loans=loans,
+            auto_deposit_pct=int(c.get("auto_deposit_pct", 0)),
+            cover_from_personal=bool(c.get("cover_from_personal", False)),
+            months_negative=int(c.get("months_negative", 0)),
+        ))
+
     projects  = [Project(**p) for p in data.get("projects", [])]
     employees = [Employee(**e) for e in data.get("employees", [])]
     return GameState(
@@ -165,7 +247,7 @@ def _dict_to_gs(data: dict) -> GameState:
         events=data.get("events", []),
         research_progress=data.get("research_progress", {}),
         settings=data.get("settings", default_settings()),
-        schema_version=data.get("schema_version", 1),
+        schema_version=data.get("schema_version", 2),
     )
 
 

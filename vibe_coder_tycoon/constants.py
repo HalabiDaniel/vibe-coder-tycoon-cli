@@ -138,3 +138,52 @@ RESEARCH_CATEGORIES = [
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
+# Phase 1 — token milestone table (thresholds in same units as total_tokens_used)
+TOKEN_MILESTONES = [
+    (10,            "Prompt Apprentice"),
+    (100,           "Token Hustler"),
+    (1_000,         "Context Warrior"),
+    (10_000,        "Inference Engine"),
+    (100_000,       "Token God"),
+    (1_000_000_000, "Token Singularity"),
+]
+
+# Phase 1 — lender table
+LENDERS = [
+    {
+        "name": "VibeBank",
+        "desc": "No collateral required. Just vibes and a dream.",
+        "rate": 0.08,
+        "term_months": 12,
+        "max_amount": 10_000,
+        "min_reputation": 15,
+    },
+    {
+        "name": "StartupVault",
+        "desc": "Seed-stage friendly. High rate but closes in 48h.",
+        "rate": 0.15,
+        "term_months": 24,
+        "max_amount": 50_000,
+        "min_reputation": 30,
+    },
+    {
+        "name": "CryptoCapital",
+        "desc": "Volatile terms. Accepts meme-backed collateral. DYOR.",
+        "rate": 0.20,
+        "term_months": 6,
+        "max_amount": 25_000,
+        "min_reputation": 10,
+    },
+    {
+        "name": "FriendFund",
+        "desc": "Your friend Kyle. Low rate, awkward holiday dinners.",
+        "rate": 0.05,
+        "term_months": 6,
+        "max_amount": 5_000,
+        "min_reputation": 0,
+    },
+]
+
+# Cycling auto-deposit percentages (used by toggle in Companies tab)
+AUTO_DEPOSIT_CYCLE = [0, 10, 25, 50]
+

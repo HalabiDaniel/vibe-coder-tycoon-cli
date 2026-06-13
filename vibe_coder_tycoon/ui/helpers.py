@@ -115,6 +115,12 @@ def input_field(win, y, x, width, value, *, focus=False, secret=False, blink=Fal
         cx = x + 2 + min(len(shown), inner_w - 1)
         safe_addstr(win, y + 1, cx, "█", curses.color_pair(PAIR_MENU_LOGO) | curses.A_BLINK)
 
+def _vibe_gauge(vibe: float, width: int = 5) -> str:
+    """Render a fixed-width vibe bar using block chars."""
+    filled = max(0, min(width, round(vibe / 100 * width)))
+    return "█" * filled + "░" * (width - filled)
+
+
 def draw_topbar(win, gs: GameState):
     h, w = win.getmaxyx()
     win.attron(curses.color_pair(PAIR_TOPBAR))
@@ -124,32 +130,55 @@ def draw_topbar(win, gs: GameState):
     logo = " ⚡ VIBE CODER TYCOON "
     safe_addstr(win, 0, 1, logo, curses.color_pair(PAIR_LOGO) | curses.A_BOLD)
 
-    total_cash = gs.total_cash()
-    sub = AI_SUBS[gs.active_ai_sub_idx]["name"]
+    f = gs.founder
     date_str = f"{MONTH_NAMES[gs.month-1]} {gs.year}"
+    personal = f.personal_cash
+    tokens   = f.total_tokens_used
+    rep      = f.reputation
+    vibe     = f.vibe
+    gauge    = _vibe_gauge(vibe)
 
-    # Player name is right-aligned; reserve its space so stats never collide.
-    pname = f" 👤 {gs.founder.username}  "
+    # Choose vibe colour: calm (muted) → flowing (accent) → chaotic (warn)
+    if vibe >= 70:
+        vibe_pair = PAIR_WARN
+    elif vibe >= 30:
+        vibe_pair = PAIR_ACCENT
+    else:
+        vibe_pair = PAIR_MUTED
+
+    # Player name right-aligned; reserve space so stats never collide.
+    pname = f" 👤 {f.username}  "
     name_x = w - disp_width(pname) - 1
     safe_addstr(win, 0, name_x, pname,
                 curses.color_pair(PAIR_TOPBAR) | curses.A_BOLD)
 
-    stats = [
-        (f"  📅 {date_str}",                     curses.color_pair(PAIR_TOPBAR)),
-        (f"  💰 ${total_cash:,}",                curses.color_pair(PAIR_TOPBAR) | curses.A_BOLD),
-        (f"  🤖 {sub}",                          curses.color_pair(PAIR_TOPBAR)),
-        (f"  🔥 Burnout:{gs.founder.burnout}%",  curses.color_pair(PAIR_TOPBAR)),
-        (f"  ⭐ Rep:{gs.founder.reputation}",     curses.color_pair(PAIR_TOPBAR)),
-        (f"  🏢 {len(gs.active_companies())} cos", curses.color_pair(PAIR_TOPBAR)),
-    ]
     cx = disp_width(logo) + 2
-    for text, attr in stats:
+
+    def _stat(text, attr):
+        nonlocal cx
         tw = disp_width(text)
-        # Stop before we'd overrun the reserved player-name area.
         if cx + tw > name_x:
-            break
+            return False
         safe_addstr(win, 0, cx, text, attr)
         cx += tw
+        return True
+
+    _stat(f"  📅 {date_str}", curses.color_pair(PAIR_TOPBAR))
+    _stat(f"  💰 ${personal:,.0f}", curses.color_pair(PAIR_TOPBAR) | curses.A_BOLD)
+    _stat(f"  🪙 {tokens:,}K", curses.color_pair(PAIR_TOPBAR))
+    _stat(f"  ⭐ Rep:{rep}", curses.color_pair(PAIR_TOPBAR))
+
+    # Vibe gauge rendered with colour inline
+    vibe_label = "  ✨ V:["
+    if cx + disp_width(vibe_label) + 7 <= name_x:
+        safe_addstr(win, 0, cx, vibe_label, curses.color_pair(PAIR_TOPBAR))
+        cx += disp_width(vibe_label)
+        safe_addstr(win, 0, cx, gauge, curses.color_pair(vibe_pair) | curses.A_BOLD)
+        cx += len(gauge)
+        safe_addstr(win, 0, cx, "]", curses.color_pair(PAIR_TOPBAR))
+        cx += 1
+
+    _stat(f"  🏢 {len(gs.active_companies())} cos", curses.color_pair(PAIR_TOPBAR))
 
 def draw_tabs(win, active_tab: int):
     h, w = win.getmaxyx()

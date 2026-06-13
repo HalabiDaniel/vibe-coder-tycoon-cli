@@ -5,6 +5,17 @@ from typing import Optional
 # ─────────────────────── DATA MODELS ──────────────────────────
 
 @dataclass
+class Loan:
+    lender: str
+    principal: int
+    balance: int
+    rate: float       # annual interest rate (e.g. 0.08 = 8%)
+    term_months: int
+    company_id: int
+    monthly_payment: int
+
+
+@dataclass
 class Project:
     name: str
     ptype: str
@@ -24,6 +35,7 @@ class Project:
     launch_date: str = ""
     lifetime_revenue: int = 0
 
+
 @dataclass
 class Employee:
     name: str
@@ -37,6 +49,7 @@ class Employee:
     trait: str = ""
     loyalty: int = 75
     productivity: int = 75
+
 
 @dataclass
 class Company:
@@ -58,6 +71,11 @@ class Company:
     founded_year: int
     active: bool = True
     loans: list = field(default_factory=list)
+    # Phase 1
+    auto_deposit_pct: int = 0
+    cover_from_personal: bool = False
+    months_negative: int = 0
+
 
 @dataclass
 class Founder:
@@ -73,6 +91,11 @@ class Founder:
     achievements: list = field(default_factory=list)
     career_history: list = field(default_factory=list)
     unlocked_research: list = field(default_factory=list)
+    # Phase 1
+    personal_cash: float = 1000.0
+    vibe: float = 50.0
+    sanity: int = 100
+
 
 @dataclass
 class GameState:
@@ -89,7 +112,7 @@ class GameState:
     research_progress: dict
     settings: dict
     demo_ended: bool = False
-    schema_version: int = 1
+    schema_version: int = 2
 
     def total_cash(self):
         return sum(c.cash for c in self.companies if c.active)
@@ -108,4 +131,3 @@ class GameState:
 
     def employees_for_company(self, cid):
         return [e for e in self.employees if e.company_id == cid]
-
