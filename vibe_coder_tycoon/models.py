@@ -56,6 +56,18 @@ class Project:
     faked_features: list = field(default_factory=list)
     paused_dev: bool = False
     dev_session: Optional[DevSession] = None
+    # Phase 3 — product lifecycle fields
+    revenue_model: str = ""
+    obsolescence_months: int = 0
+    age_months: int = 0
+    active_users: int = 0
+    churn_rate: float = 0.05
+    version: int = 1
+    parent_product_id: int = -1
+    auto_update_interval: int = 0
+    auto_update_countdown: int = 0
+    discontinued: bool = False
+    revenue_history: list = field(default_factory=list)
 
 
 @dataclass
@@ -134,7 +146,7 @@ class GameState:
     research_progress: dict
     settings: dict
     demo_ended: bool = False
-    schema_version: int = 3
+    schema_version: int = 4
 
     def total_cash(self):
         return sum(c.cash for c in self.companies if c.active)

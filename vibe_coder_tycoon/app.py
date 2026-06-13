@@ -41,6 +41,7 @@ from .constants import (
     EMPLOYEE_ROLES, EMPLOYEE_TRAITS, RESEARCH_CATEGORIES,
     COMPANY_LEGAL_STYLES, COMPANY_FOCUS_AREAS, FUNDING_STYLES, RISK_APPETITES,
     PROJECT_TYPES, TECH_STACKS, NICHES, AUTO_DEPOSIT_CYCLE, FEATURE_SCOPES, QA_OPTIONS,
+    AUTO_UPDATE_CYCLES,
 )
 
 
@@ -940,6 +941,53 @@ def main(stdscr):
                                 projects_ui.dev_project_idx = p_idx
                                 projects_ui.view = "dev"
                                 dev_ui.action_sel = 0
+                    # ── Phase 3 product lifecycle actions ──────────
+                    elif key in (ord('u'), ord('U')):
+                        if _visible and 0 <= projects_ui.selected < len(_visible):
+                            p = _visible[projects_ui.selected]
+                            if p.status in ("Launched", "Growing"):
+                                p_idx = gs.projects.index(p)
+                                result = dispatch(gs, "product_minor_update", project_idx=p_idx)
+                                status_msg = ("✓ " if result.ok else "✗ ") + result.message
+                    elif key in (ord('m'), ord('M')):
+                        if _visible and 0 <= projects_ui.selected < len(_visible):
+                            p = _visible[projects_ui.selected]
+                            if p.status in ("Launched", "Growing"):
+                                p_idx = gs.projects.index(p)
+                                result = dispatch(gs, "product_major_revision", project_idx=p_idx)
+                                status_msg = ("✓ " if result.ok else "✗ ") + result.message
+                                if result.ok:
+                                    projects_ui.dev_project_idx = p_idx
+                                    projects_ui.view = "dev"
+                                    dev_ui.action_sel = 0
+                    elif key in (ord('v'), ord('V')):
+                        if _visible and 0 <= projects_ui.selected < len(_visible):
+                            p = _visible[projects_ui.selected]
+                            if p.status in ("Launched", "Growing"):
+                                p_idx = gs.projects.index(p)
+                                result = dispatch(gs, "product_new_version", project_idx=p_idx)
+                                status_msg = ("✓ " if result.ok else "✗ ") + result.message
+                    elif key in (ord('s'), ord('S')):
+                        if _visible and 0 <= projects_ui.selected < len(_visible):
+                            p = _visible[projects_ui.selected]
+                            if p.status in ("Launched", "Growing"):
+                                p_idx = gs.projects.index(p)
+                                result = dispatch(gs, "product_discontinue", project_idx=p_idx)
+                                status_msg = ("✓ " if result.ok else "✗ ") + result.message
+                    elif key in (ord('a'), ord('A')):
+                        if _visible and 0 <= projects_ui.selected < len(_visible):
+                            p = _visible[projects_ui.selected]
+                            if p.status in ("Launched", "Growing"):
+                                p_idx = gs.projects.index(p)
+                                cur = getattr(p, "auto_update_interval", 0)
+                                try:
+                                    idx = AUTO_UPDATE_CYCLES.index(cur)
+                                except ValueError:
+                                    idx = 0
+                                new_interval = AUTO_UPDATE_CYCLES[(idx + 1) % len(AUTO_UPDATE_CYCLES)]
+                                result = dispatch(gs, "product_set_auto_update",
+                                                  project_idx=p_idx, interval=new_interval)
+                                status_msg = ("✓ " if result.ok else "✗ ") + result.message
 
                 elif projects_ui.view == "new":
                     if key == 27:

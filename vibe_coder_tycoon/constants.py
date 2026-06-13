@@ -312,3 +312,56 @@ TERMINAL_LOG_LINES = [
     "User story complete: undefined requirements met.",
 ]
 
+# ─────────────────────── PHASE 3 DATA ─────────────────────────
+
+# Revenue model behaviors — revenue_per_user is base $ per active user per month
+REVENUE_MODELS = {
+    "Subscription": {
+        "desc": "Monthly recurring revenue. Grows with users, decays with churn.",
+        "revenue_per_user": 8.0,
+    },
+    "One-Time": {
+        "desc": "Pay-once purchase. Big launch spike, residual new buyers over time.",
+        "revenue_per_user": 1.5,
+    },
+    "Ads": {
+        "desc": "Ad-supported. Revenue scales with daily active user count.",
+        "revenue_per_user": 0.6,
+    },
+    "Commission": {
+        "desc": "Usage/commission-based. Revenue scales with transaction volume.",
+        "revenue_per_user": 3.5,
+    },
+}
+
+# Default revenue model per project type
+PRODUCT_REVENUE_MODELS = {
+    "SaaS Web App":       "Subscription",
+    "Mobile App":         "Ads",
+    "Browser Extension":  "One-Time",
+    "CLI Tool":           "One-Time",
+    "API / Backend":      "Commission",
+    "AI Wrapper":         "Subscription",
+    "Discord Bot":        "Subscription",
+    "No-Code Template":   "One-Time",
+    "Developer Tool":     "Subscription",
+    "Content Platform":   "Ads",
+}
+
+# Obsolescence windows (min, max months) per product type — silent revenue decay
+OBSOLESCENCE_WINDOWS = {
+    "SaaS Web App":       (18, 36),
+    "Mobile App":         (12, 24),
+    "Browser Extension":  (24, 48),
+    "CLI Tool":           (36, 60),
+    "API / Backend":      (24, 48),
+    "AI Wrapper":         (6,  18),
+    "Discord Bot":        (12, 24),
+    "No-Code Template":   (12, 30),
+    "Developer Tool":     (24, 48),
+    "Content Platform":   (12, 24),
+}
+
+# Auto-update interval options (months; 0 = disabled)
+AUTO_UPDATE_CYCLES = [0, 1, 2, 3, 6]
+

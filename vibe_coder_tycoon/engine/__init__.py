@@ -13,6 +13,7 @@ from ..persistence import default_settings
 from .actions import dispatch, ActionResult  # noqa: F401 — re-exported
 from .systems import finance        # registers finance actions as a side-effect
 from .systems import development    # registers dev actions as a side-effect
+from .systems import products       # registers product actions as a side-effect
 
 
 def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
@@ -83,23 +84,14 @@ def advance_month(gs: GameState) -> str:
     finance_events = finance.monthly_settlement(gs)
     events_this_month.extend(finance_events)
 
-    # Progress in-dev projects via development system
+    # Progress in-dev projects via development system; tick launched products
     for p in gs.projects:
         if p.status == "In Dev":
             dev_events = development.tick_dev_project(gs, p)
             events_this_month.extend(dev_events)
         elif p.status in ("Launched", "Growing"):
-            growth = random.randint(2, 8)
-            p.revenue = max(0, p.revenue + growth * 10)
-            p.users   = max(0, p.users + random.randint(10, 80))
-            p.lifetime_revenue += p.revenue
-            c = gs.company_by_id(p.company_id)
-            if c:
-                c.monthly_revenue = sum(
-                    proj.revenue for proj in gs.projects if proj.company_id == c.id
-                )
-            if p.revenue > 1000 and p.status == "Launched":
-                p.status = "Growing"
+            prod_events = products.monthly_product_tick(gs, p, date_str)
+            events_this_month.extend(prod_events)
 
     # Founder burnout
     burnout_delta = random.randint(-2, 5) - gs.founder.skill_management // 20

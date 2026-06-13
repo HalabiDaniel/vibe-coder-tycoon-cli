@@ -10,6 +10,24 @@ from ...constants import *
 from ...models import GameState, Founder, Company, Project, Employee
 
 
+# ─────────────────────── UI HELPERS ───────────────────────────
+
+def _sparkline(values: list, width: int = 14) -> str:
+    """Return a text sparkline for the given revenue history list."""
+    if not values:
+        return "—" * width
+    CHARS = " ▁▂▃▄▅▆▇█"
+    mn, mx = min(values), max(values)
+    recent = values[-width:]
+    if mx == mn:
+        return "▄" * len(recent)
+    return "".join(CHARS[min(8, int((v - mn) / (mx - mn) * 8))] for v in recent)
+
+
+def _btn(win, y: int, x: int, label: str, pair: int):
+    safe_addstr(win, y, x, label, curses.color_pair(pair) | curses.A_BOLD)
+
+
 # ─────────────────────── PROJECTS TAB ─────────────────────────
 
 @dataclass
@@ -87,48 +105,90 @@ def draw_projects(win, gs: GameState, ui: ProjectsUIState):
     # Detail panel
     if visible and 0 <= ui.selected < len(visible):
         p = visible[ui.selected]
-        safe_addstr(win, y, 2, f" Detail: {p.name} ", curses.color_pair(PAIR_TITLE) | curses.A_BOLD)
+        ver_tag = f"  v{p.version}" if p.version > 1 else ""
+        safe_addstr(win, y, 2, f" Detail: {p.name}{ver_tag} ", curses.color_pair(PAIR_TITLE) | curses.A_BOLD)
         y += 1
-        mid = w // 2
+
+        # Core details (always shown)
         details = [
-            ("Stack",         p.stack),
-            ("Niche",         p.niche),
-            ("AI Model",      p.model),
-            ("MRR",           f"${p.revenue:,}"),
-            ("Users",         f"{p.users:,}"),
-            ("Tokens Used",   f"{p.tokens_used:,}K"),
-            ("Bug Count",     str(p.bug_count)),
-            ("Hype",          f"{p.hype}/100"),
-            ("Tech Debt",     f"{p.tech_debt}/100"),
-            ("Team Morale",   f"{p.morale}%"),
-            ("Lifetime Rev",  f"${p.lifetime_revenue:,}"),
-            ("Launch Date",   p.launch_date if p.launch_date else "—"),
+            ("Stack",        p.stack),
+            ("Niche",        p.niche),
+            ("AI Model",     p.model),
+            ("MRR",          f"${p.revenue:,}"),
+            ("Lifetime Rev", f"${p.lifetime_revenue:,}"),
+            ("Tokens Used",  f"{p.tokens_used:,}K"),
+            ("Bug Count",    str(p.bug_count)),
+            ("Hype",         f"{p.hype}/100"),
+            ("Launch Date",  p.launch_date if p.launch_date else "—"),
         ]
-        col_w = (w-4) // 3
+
+        # Phase 3 fields for launched products
+        if p.status in ("Launched", "Growing", "Sunset"):
+            obso_pct = (p.age_months / p.obsolescence_months) if p.obsolescence_months else 0
+            if obso_pct >= 1.0:
+                obso_label = "Obsolete"
+            elif obso_pct >= 0.75:
+                obso_label = "Aging"
+            elif obso_pct >= 0.5:
+                obso_label = "Maturing"
+            else:
+                obso_label = "Fresh"
+            auto_tag = f"Every {p.auto_update_interval}mo" if p.auto_update_interval else "Off"
+            details.extend([
+                ("Rev Model",    p.revenue_model or "—"),
+                ("Age",          f"{p.age_months}mo  [{obso_label}]"),
+                ("Active Users", f"{p.active_users:,}"),
+                ("Churn Rate",   f"{p.churn_rate:.1%}/mo"),
+                ("Auto-Update",  auto_tag),
+            ])
+
+        col_w = (w - 4) // 3
         for j, (k, v) in enumerate(details):
-            if y + j//3 >= h - 6:
+            if y + j // 3 >= h - 8:
                 break
             col = j % 3
             row_off = j // 3
             dx = 4 + col * col_w
-            safe_addstr(win, y+row_off, dx, f"{k}: ", curses.color_pair(PAIR_MUTED))
-            safe_addstr(win, y+row_off, dx+len(k)+2, v, curses.color_pair(PAIR_ACCENT))
+            safe_addstr(win, y + row_off, dx, f"{k}: ", curses.color_pair(PAIR_MUTED))
+            safe_addstr(win, y + row_off, dx + len(k) + 2, v, curses.color_pair(PAIR_ACCENT))
 
-        act_y = y + (len(details)-1)//3 + 2
+        detail_rows = (len(details) - 1) // 3 + 1
+        act_y = y + detail_rows + 1
+
+        # Revenue sparkline for launched products
+        rev_hist = getattr(p, "revenue_history", [])
+        if rev_hist and p.status in ("Launched", "Growing") and act_y < h - 7:
+            spark = _sparkline(rev_hist)
+            safe_addstr(win, act_y, 4, "Revenue trend: ", curses.color_pair(PAIR_MUTED))
+            safe_addstr(win, act_y, 19, spark, curses.color_pair(PAIR_ACCENT))
+            peak = max(rev_hist)
+            safe_addstr(win, act_y, 19 + len(spark) + 1,
+                        f"  peak ${peak:,}", curses.color_pair(PAIR_MUTED))
+            act_y += 1
+
+        # Action buttons
+        ax = 4
+        btn_y = min(act_y, h - 5)
         if p.status in ("In Dev", "Dev Complete"):
-            dev_label = "[ Enter: Open Dev Dashboard ]"
-            safe_addstr(win, min(act_y, h-5), 4, dev_label,
-                        curses.color_pair(PAIR_BUTTON_FOCUS) | curses.A_BOLD)
-            ax = 4 + len(dev_label) + 2
-        else:
-            ax = 4
-        other_actions = ["[ Sunset ]", "[ View Analytics ]", "[ Archive ]"]
-        for act in other_actions:
-            safe_addstr(win, min(act_y, h-5), ax, act, curses.color_pair(PAIR_BUTTON) | curses.A_BOLD)
-            ax += len(act) + 2
+            _btn(win, btn_y, ax, "[ Enter: Dev Dashboard ]", PAIR_BUTTON_FOCUS)
+        elif p.status in ("Launched", "Growing"):
+            for label, pair in [
+                ("[ U: Minor Update ]",    PAIR_BUTTON),
+                ("[ M: Major Revision ]",  PAIR_BUTTON),
+                ("[ V: New Version ]",     PAIR_BUTTON),
+                ("[ S: Sunset ]",          PAIR_BUTTON),
+                ("[ A: Auto-Update ]",     PAIR_BUTTON),
+            ]:
+                safe_addstr(win, btn_y, ax, label, curses.color_pair(pair) | curses.A_BOLD)
+                ax += len(label) + 2
+                if ax > w - 20:
+                    btn_y += 1
+                    ax = 4
+                    if btn_y >= h - 3:
+                        break
 
     safe_addstr(win, h-4, 2,
-                "Up/Down: select  |  ◄/►: filter  |  N: new project  |  Enter: dev dashboard",
+                "Up/Down: select  |  ◄/►: filter  |  N: new  |  Enter: dev  |  U/M/V/S/A: product actions",
                 curses.color_pair(PAIR_MUTED))
 
 def _draw_new_project_wizard(win, gs: GameState, ui: ProjectsUIState):

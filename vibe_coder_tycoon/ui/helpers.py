@@ -55,13 +55,14 @@ def badge(win, y, x, text, pair):
 
 def status_pair(status):
     return {
-        "In Dev":   PAIR_BADGE_BLUE,
-        "Launched": PAIR_BADGE_AMBER,
-        "Growing":  PAIR_BADGE_GREEN,
-        "Failed":   PAIR_BADGE_RED,
-        "Sunset":   PAIR_BADGE_RED,
-        "Archived": PAIR_MUTED,
-        "Sold":     PAIR_BADGE_AMBER,
+        "In Dev":       PAIR_BADGE_BLUE,
+        "Dev Complete": PAIR_BADGE_AMBER,
+        "Launched":     PAIR_BADGE_AMBER,
+        "Growing":      PAIR_BADGE_GREEN,
+        "Failed":       PAIR_BADGE_RED,
+        "Sunset":       PAIR_BADGE_RED,
+        "Archived":     PAIR_MUTED,
+        "Sold":         PAIR_BADGE_AMBER,
     }.get(status, PAIR_BADGE_BLUE)
 
 def fill_background(win, pair):

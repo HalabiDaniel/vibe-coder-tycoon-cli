@@ -294,20 +294,11 @@ def _dev_launch(gs: GameState, project_idx: int) -> ActionResult:
     if p.status != "Dev Complete":
         return ActionResult(ok=False, message=f"Project not ready (status: {p.status}).")
 
+    from .products import launch_product  # lazy import avoids init-time cycle
     date_str = f"{MONTH_NAMES[gs.month - 1]} {gs.year}"
     p.status = "Launched"
     p.launch_date = date_str
-
-    # Initial MRR driven by hype × quality
-    p.revenue = int((p.hype * 0.4 + p.quality_score * 0.6) * 4)
-
-    adjust_reputation(gs, 3 + p.quality_score // 20)
-    add_vibe(gs, 10.0)
-
-    if p.faked_features:
-        adjust_reputation(gs, -len(p.faked_features) * 2)
-
-    return ActionResult(
-        ok=True,
-        message=f"{p.name} launched! Quality {p.quality_score}/100. Starting MRR: ${p.revenue:,}",
-    )
+    p.age_months = 0
+    p.revenue_history = []
+    msg = launch_product(gs, p)
+    return ActionResult(ok=True, message=msg)

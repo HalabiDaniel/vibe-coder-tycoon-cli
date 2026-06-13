@@ -196,6 +196,21 @@ def _migrate(data: dict) -> dict:
             p.setdefault("dev_session", None)
             p.setdefault("hype", 30)
         data["schema_version"] = 3
+    if version < 4:
+        # Phase 3: add product lifecycle fields
+        for p in data.get("projects", []):
+            p.setdefault("revenue_model", "")
+            p.setdefault("obsolescence_months", 0)
+            p.setdefault("age_months", 0)
+            p.setdefault("active_users", p.get("users", 0))
+            p.setdefault("churn_rate", 0.05)
+            p.setdefault("version", 1)
+            p.setdefault("parent_product_id", -1)
+            p.setdefault("auto_update_interval", 0)
+            p.setdefault("auto_update_countdown", 0)
+            p.setdefault("discontinued", False)
+            p.setdefault("revenue_history", [])
+        data["schema_version"] = 4
     return data
 
 
@@ -268,6 +283,10 @@ def _dict_to_gs(data: dict) -> GameState:
             "design_score", "tech_score", "quality_score", "qa_level", "scope",
             "budget", "dev_weeks", "dev_day", "dev_total_days",
             "faked_features", "paused_dev",
+            # Phase 3 fields
+            "revenue_model", "obsolescence_months", "age_months", "active_users",
+            "churn_rate", "version", "parent_product_id", "auto_update_interval",
+            "auto_update_countdown", "discontinued", "revenue_history",
         }
         clean = {k: v for k, v in pd.items() if k in known}
         p = Project(**clean)
