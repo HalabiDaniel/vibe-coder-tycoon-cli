@@ -89,6 +89,7 @@ class GameState:
     research_progress: dict
     settings: dict
     demo_ended: bool = False
+    schema_version: int = 1
 
     def total_cash(self):
         return sum(c.cash for c in self.companies if c.active)

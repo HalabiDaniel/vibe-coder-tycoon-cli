@@ -62,10 +62,27 @@ def draw_demo_end(win, gs: GameState):
         vp = PAIR_ACCENT if "Revenue" in label or "Win" in label else PAIR_WARN
         safe_addstr(win, ry, bx+32, val, curses.color_pair(vp) | curses.A_BOLD)
 
-    center_text(win, by + len(rows) + 5,
-                "Thanks for playing Vibe Coder Tycoon.",
-                curses.color_pair(PAIR_MUTED))
-    center_text(win, by + len(rows) + 6,
-                "Press Q to exit or R to start a new game.",
+    # ── Colourful, bordered "Thanks for playing" send-off ──
+    tw = 50
+    tx = (w - tw) // 2
+    ty = by + len(rows) + 5
+
+    safe_addstr(win, ty,   tx, "╔" + "═" * (tw - 2) + "╗",
+                curses.color_pair(PAIR_BORDER) | curses.A_BOLD)
+    for r in range(1, 5):
+        safe_addstr(win, ty + r, tx,          "║", curses.color_pair(PAIR_BORDER) | curses.A_BOLD)
+        safe_addstr(win, ty + r, tx + tw - 1, "║", curses.color_pair(PAIR_BORDER) | curses.A_BOLD)
+    safe_addstr(win, ty + 5, tx, "╚" + "═" * (tw - 2) + "╝",
+                curses.color_pair(PAIR_BORDER) | curses.A_BOLD)
+
+    center_text(win, ty + 1, "⚡ THANKS FOR PLAYING ⚡",
+                curses.color_pair(PAIR_TITLE) | curses.A_BOLD)
+    center_text(win, ty + 2, "V I B E   C O D E R   T Y C O O N",
+                curses.color_pair(PAIR_WARN) | curses.A_BOLD)
+    center_text(win, ty + 4, "Build fast.  Ship often.  Don't burn out.",
+                curses.color_pair(PAIR_ACCENT))
+
+    center_text(win, ty + 7,
+                "Press Q to exit  •  R to start a new game",
                 curses.color_pair(PAIR_MUTED))
 

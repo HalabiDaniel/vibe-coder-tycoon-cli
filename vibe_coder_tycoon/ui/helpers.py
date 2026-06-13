@@ -168,7 +168,7 @@ def draw_tabs(win, active_tab: int):
                         curses.color_pair(PAIR_TAB_INACTIVE))
         cx += len(label)
 
-    hints = " Tab→  Shift+Tab←  Q:Quit  N:Next Month  Enter:Select "
+    hints = " Tab→  Shift+Tab←  Q:Save & Menu  N:Next Month  Enter:Select "
     safe_addstr(win, 1, w - len(hints) - 1, hints, curses.color_pair(PAIR_MUTED))
 
 def draw_statusbar(win, msg: str):

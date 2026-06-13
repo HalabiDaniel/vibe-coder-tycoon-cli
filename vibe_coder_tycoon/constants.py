@@ -1,4 +1,12 @@
 import os
+import sys
+
+# Load .env file if present (no-op if python-dotenv not installed or file absent)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 
 # ─────────────────────── CONSTANTS ────────────────────────────
@@ -6,7 +14,22 @@ import os
 GAME_VERSION = "v0.9.0-alpha"
 DEMO_MONTH_LIMIT = 12
 
+# Legacy save path — only used for one-time migration
 SAVE_FILE = os.path.expanduser("~/.vibe_coder_save.json")
+
+# Platform-aware app config directory
+def _get_config_dir() -> str:
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+    else:
+        base = os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(base, "vibe-coder-tycoon")
+
+APP_CONFIG_DIR = _get_config_dir()
+
+# Supabase credentials — set via .env or environment variables
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
 TABS = [
     "Dashboard", "Founder", "Companies", "Projects",

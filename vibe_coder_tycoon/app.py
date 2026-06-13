@@ -1,5 +1,7 @@
 import curses
 import random
+import sys
+from typing import Optional
 
 from .ui.colors import init_colors, PAIR_TICKER, PAIR_PANEL, PAIR_OVERLAY
 from .ui.helpers import (
@@ -21,11 +23,17 @@ from .ui.screens.research import ResearchUIState, draw_research
 from .ui.screens.news import NewsUIState, draw_news
 from .ui.screens.help import draw_help
 from .ui.screens.demo_end import draw_demo_end
+from .ui.screens.account import AccountUIState, draw_account, ACCOUNT_BUTTON_COUNT, account_button_label
+from .ui.screens.save_slots import SaveSlotsUIState, draw_save_slots
+from .ui.screens.sync_conflict import draw_sync_conflict, CONFLICT_OPTIONS
 from .models import Founder, Company, Project, Employee, GameState
 from .persistence import (
     accounts_sign_in, accounts_create, save_game, load_game, default_settings,
+    compute_checksum, add_to_sync_queue, flush_sync_queue,
+    gs_from_cloud_data, save_game_from_cloud,
 )
 from .engine import make_new_game, advance_month
+from .cloud import CloudService
 from .constants import (
     TABS, BACKGROUNDS, AI_SUBS, DEMO_MONTH_LIMIT, MONTH_NAMES,
     EMPLOYEE_ROLES, EMPLOYEE_TRAITS, RESEARCH_CATEGORIES,
@@ -55,11 +63,13 @@ def main(stdscr):
     stdscr.keypad(True)
     stdscr.timeout(100)
 
-    # ── Loading screen (feels nice, ~3s) ──
     run_loading_screen(stdscr, duration=3.0)
 
-    # ── State ──
-    screen = "title"    # title | sign_in | sign_up | credits | settings_pre | game
+    # ── Cloud service (lazy-initialised; no-ops if unconfigured) ──
+    cloud = CloudService()
+
+    # ── Navigation / animation state ──
+    screen = "title"
     title_sel = 0
     blink = True
     blink_tick = 0
@@ -67,21 +77,46 @@ def main(stdscr):
     ticker_tick = 0
     status_msg = ""
 
-    sign_in_state = SignInState()
-    sign_up_state = SignUpState()
-    settings_ui   = SettingsUIState()
+    # ── Auth UI state ──
+    sign_in_state  = SignInState()
+    sign_up_state  = SignUpState()
+    settings_ui    = SettingsUIState()
     standalone_settings = default_settings()
 
+    # ── Cloud / session state ──
     gs: Optional[GameState] = None
-    current_user: Optional[str] = None
+    current_user: Optional[str] = None   # display username
+    cloud_user_id: Optional[str] = None  # Supabase UUID
+    cloud_email: Optional[str] = None
+    cloud_sync_status: str = ""          # "synced" | "pending" | "failed" | ""
+    cloud_last_sync: str = "Never"
+    pending_cloud_slots: list = []       # slots fetched after sign-in
+    pending_cloud_slot_id: Optional[str] = None  # slot chosen from save_slots screen
+    conflict_local_info: dict = {}
+    conflict_cloud_info: dict = {}
+    conflict_cloud_slot_id: Optional[str] = None
+    conflict_sel: int = 0
 
+    # ── Game UI state ──
     active_tab = 0
     dash_company_sel = 0
-    companies_ui = CompaniesUIState()
-    projects_ui  = ProjectsUIState()
-    employees_ui = EmployeesUIState()
-    research_ui  = ResearchUIState()
-    news_ui      = NewsUIState()
+    companies_ui  = CompaniesUIState()
+    projects_ui   = ProjectsUIState()
+    employees_ui  = EmployeesUIState()
+    research_ui   = ResearchUIState()
+    news_ui       = NewsUIState()
+    account_ui    = AccountUIState()
+    save_slots_ui = SaveSlotsUIState()
+
+    # ── Attempt to restore a saved session silently ──
+    if cloud.is_configured:
+        restored_user, _ = cloud.restore_session()
+        if restored_user:
+            cloud_user_id = restored_user.id
+            cloud_email   = restored_user.email
+            profile, _    = cloud.get_profile(cloud_user_id)
+            if profile:
+                current_user = profile.get("username", cloud_email)
 
     while True:
         stdscr.erase()
@@ -97,7 +132,7 @@ def main(stdscr):
             ticker_tick = 0
             ticker_idx = (ticker_idx + 1) % len(TICKERS)
 
-        # ── DRAW ──
+        # ── DRAW ──────────────────────────────────────────────
         if screen == "title":
             draw_title_screen(stdscr, title_sel, blink)
 
@@ -115,6 +150,29 @@ def main(stdscr):
         elif screen == "settings_pre":
             fill_background(stdscr, PAIR_OVERLAY)
             draw_settings_screen(stdscr, None, settings_ui, standalone_settings)
+
+        elif screen == "save_slots":
+            fill_background(stdscr, PAIR_OVERLAY)
+            draw_save_slots(stdscr, pending_cloud_slots, save_slots_ui)
+
+        elif screen == "sync_conflict":
+            fill_background(stdscr, PAIR_OVERLAY)
+            draw_sync_conflict(stdscr, conflict_local_info, conflict_cloud_info, conflict_sel)
+
+        elif screen == "account":
+            fill_background(stdscr, PAIR_OVERLAY)
+            cloud_info = {
+                "username":     current_user or "—",
+                "email":        cloud_email or "—",
+                "founder_name": gs.founder.username if gs and gs.founder else "—",
+                "background":   BACKGROUNDS[gs.founder.background_idx]["name"]
+                                if gs and gs.founder else "—",
+                "login_status": "Signed In" if cloud_user_id else "Offline",
+                "last_sync":    cloud_last_sync,
+                "slot_name":    "autosave",
+                "is_configured": cloud.is_configured,
+            }
+            draw_account(stdscr, gs, account_ui, cloud_info)
 
         elif screen == "game":
             if gs is None:
@@ -150,20 +208,27 @@ def main(stdscr):
                 elif tab == "Help":
                     draw_help(stdscr)
 
-                # Ticker
                 ticker_msg = TICKERS[ticker_idx]
                 safe_addstr(stdscr, h-2, 2, f" ▶ {ticker_msg} ",
                             curses.color_pair(PAIR_TICKER))
-                draw_statusbar(stdscr, status_msg)
+
+                sync_indicator = ""
+                if cloud_sync_status == "synced":
+                    sync_indicator = " ☁ synced"
+                elif cloud_sync_status == "pending":
+                    sync_indicator = " ⚠ sync pending"
+                elif cloud_sync_status == "failed":
+                    sync_indicator = " ✗ sync failed"
+                draw_statusbar(stdscr, status_msg + sync_indicator)
 
         stdscr.refresh()
 
-        # ── INPUT ──
+        # ── INPUT ─────────────────────────────────────────────
         key = stdscr.getch()
         if key == -1:
             continue
 
-        # ── TITLE SCREEN ──
+        # ── TITLE SCREEN ──────────────────────────────────────
         if screen == "title":
             if key == curses.KEY_UP:
                 title_sel = (title_sel - 1) % len(TITLE_MENU)
@@ -175,12 +240,13 @@ def main(stdscr):
                     break
                 elif sel_key == "S":
                     sign_in_state = SignInState()
+                    # Change label to Email Address for Supabase auth
+                    sign_in_state.fields[0]["label"] = "Email Address"
                     screen = "sign_in"
                 elif sel_key == "C":
                     sign_up_state = SignUpState()
                     screen = "sign_up"
                 elif sel_key == "O":
-                    # Play offline — create a quick offline founder
                     founder = Founder(
                         username="OfflineFounder",
                         background_idx=0,
@@ -191,6 +257,7 @@ def main(stdscr):
                     )
                     gs = make_new_game(founder, 0)
                     current_user = None
+                    cloud_user_id = None
                     run_loading_screen(stdscr)
                     screen = "game"
                     active_tab = 0
@@ -199,11 +266,11 @@ def main(stdscr):
                     screen = "settings_pre"
                 elif sel_key == "R":
                     screen = "credits"
-            # Keyboard shortcuts on title
             elif key == ord('q') or key == ord('Q'):
                 break
             elif key == ord('s') or key == ord('S'):
                 sign_in_state = SignInState()
+                sign_in_state.fields[0]["label"] = "Email Address"
                 screen = "sign_in"
             elif key == ord('c') or key == ord('C'):
                 sign_up_state = SignUpState()
@@ -219,6 +286,7 @@ def main(stdscr):
                 )
                 gs = make_new_game(founder, 0)
                 current_user = None
+                cloud_user_id = None
                 run_loading_screen(stdscr)
                 screen = "game"
                 status_msg = "Playing offline."
@@ -227,29 +295,17 @@ def main(stdscr):
             elif key == ord('t') or key == ord('T'):
                 screen = "settings_pre"
 
-        # ── SIGN IN ──
+        # ── SIGN IN ───────────────────────────────────────────
         elif screen == "sign_in":
             if sign_in_state.step == "welcome":
                 if key in (10, curses.KEY_ENTER, 27):
-                    # Load or create game for this user
-                    loaded = load_game(current_user)
-                    if loaded:
-                        gs = loaded
-                    else:
-                        founder = Founder(
-                            username=current_user,
-                            background_idx=0,
-                            reputation=20, burnout=0,
-                            skill_prototyping=40, skill_sales=20,
-                            skill_tech=35, skill_management=20,
-                            total_tokens_used=0,
-                        )
-                        gs = make_new_game(founder, 0)
-                    run_loading_screen(stdscr)
+                    _do_enter_game(stdscr, gs)
                     screen = "game"
                     status_msg = f"Welcome back, {current_user}!"
+                    if cloud_user_id:
+                        flush_sync_queue(cloud, cloud_user_id)
             else:
-                if key == 27:  # Esc
+                if key == 27:
                     screen = "title"
                 elif key == curses.KEY_UP:
                     sign_in_state.focused = max(0, sign_in_state.focused - 1)
@@ -260,26 +316,77 @@ def main(stdscr):
                     f = sign_in_state.fields[sign_in_state.focused]
                     f["value"] = f["value"][:-1]
                 elif key in (10, curses.KEY_ENTER):
-                    uname = sign_in_state.fields[0]["value"].strip()
+                    email = sign_in_state.fields[0]["value"].strip()
                     pw    = sign_in_state.fields[1]["value"]
-                    if not uname or not pw:
+                    if not email or not pw:
                         sign_in_state.message = "Please fill in both fields."
                     else:
-                        name, data = accounts_sign_in(uname, pw)
-                        if name:
-                            current_user = name
-                            sign_in_state.success_name   = name
-                            sign_in_state.success_date   = data.get("last_played", "—")
-                            sign_in_state.success_status = data.get("founder_status", "Rookie Founder")
-                            sign_in_state.step = "welcome"
+                        session, err = cloud.sign_in(email, pw)
+                        if session:
+                            cloud_user_id = session.user.id
+                            cloud_email   = session.user.email
+                            profile, _    = cloud.get_profile(cloud_user_id)
+                            current_user  = (profile.get("username") if profile else None) or email
+
+                            # Fetch cloud saves
+                            slots, _ = cloud.list_save_slots(cloud_user_id)
+                            pending_cloud_slots = slots or []
+                            local_save = load_game(current_user)
+                            has_local = local_save is not None
+
+                            if pending_cloud_slots and has_local:
+                                # Conflict: show resolution screen
+                                latest_slot = pending_cloud_slots[0]
+                                conflict_cloud_slot_id = latest_slot["id"]
+                                cloud_save_data, _ = cloud.download_save(conflict_cloud_slot_id)
+                                conflict_local_info = _save_summary(local_save)
+                                if cloud_save_data:
+                                    cloud_gs = gs_from_cloud_data(cloud_save_data)
+                                    conflict_cloud_info = _save_summary(cloud_gs)
+                                else:
+                                    conflict_cloud_info = {}
+                                conflict_sel = 0
+                                screen = "sync_conflict"
+                            elif pending_cloud_slots:
+                                # No local — download latest cloud save
+                                latest_slot = pending_cloud_slots[0]
+                                save_data, dl_err = cloud.download_save(latest_slot["id"])
+                                if save_data:
+                                    save_game_from_cloud(current_user, save_data)
+                                    gs = gs_from_cloud_data(save_data) or load_game(current_user)
+                                else:
+                                    gs = make_new_game(_default_founder(current_user), 0)
+                                _post_sign_in(sign_in_state, current_user, profile)
+                                run_loading_screen(stdscr)
+                                screen = "game"
+                                status_msg = f"Welcome back, {current_user}! Cloud save loaded."
+                                cloud_sync_status = "synced"
+                            else:
+                                # No cloud saves — load local or new
+                                gs = local_save or make_new_game(_default_founder(current_user), 0)
+                                _post_sign_in(sign_in_state, current_user, profile)
+                                run_loading_screen(stdscr)
+                                screen = "game"
+                                status_msg = f"Welcome, {current_user}!"
                         else:
-                            sign_in_state.message = "Invalid username or password."
+                            # Cloud sign-in failed — try local fallback
+                            local_name, local_data = accounts_sign_in(email, pw)
+                            if local_name:
+                                current_user  = local_name
+                                cloud_user_id = None
+                                sign_in_state.success_name   = local_name
+                                sign_in_state.success_date   = local_data.get("last_played", "—")
+                                sign_in_state.success_status = local_data.get("founder_status", "Rookie Founder")
+                                sign_in_state.step = "welcome"
+                                gs = load_game(current_user) or make_new_game(_default_founder(current_user), 0)
+                            else:
+                                sign_in_state.message = err or "Invalid email or password."
                 elif 32 <= key < 127:
                     f = sign_in_state.fields[sign_in_state.focused]
                     if len(f["value"]) < 80:
                         f["value"] += chr(key)
 
-        # ── SIGN UP ──
+        # ── SIGN UP ───────────────────────────────────────────
         elif screen == "sign_up":
             if sign_up_state.step == "form":
                 if key == 27:
@@ -304,12 +411,23 @@ def main(stdscr):
                     elif len(uname) < 3:
                         sign_up_state.message = "Username must be at least 3 characters."
                     else:
-                        ok, msg = accounts_create(uname, email, pw1)
-                        if ok:
-                            current_user = uname
+                        user, err = cloud.sign_up(email, pw1)
+                        if user:
+                            cloud_user_id = user.id
+                            cloud_email   = user.email
+                            current_user  = uname
                             sign_up_state.step = "founder"
+                        elif err and "Cloud not configured" in err:
+                            # Offline fallback: create local account
+                            ok, msg = accounts_create(uname, email, pw1)
+                            if ok:
+                                current_user  = uname
+                                cloud_user_id = None
+                                sign_up_state.step = "founder"
+                            else:
+                                sign_up_state.message = msg
                         else:
-                            sign_up_state.message = msg
+                            sign_up_state.message = err or "Sign-up failed."
                 elif 32 <= key < 127:
                     f = sign_up_state.fields[sign_up_state.focused]
                     mx = f.get("max", 80)
@@ -350,16 +468,31 @@ def main(stdscr):
                         total_tokens_used=0,
                     )
                     gs = make_new_game(founder, sign_up_state.ai_sub_sel)
+                    # Save locally first
+                    save_data = save_game(gs, current_user)
+                    # Create cloud profile + upload initial save
+                    if cloud_user_id:
+                        cloud.create_profile(
+                            cloud_user_id,
+                            current_user,
+                            current_user,
+                            bg["name"],
+                        )
+                        checksum = compute_checksum(save_data)
+                        _, upload_err = cloud.upload_save(cloud_user_id, "autosave", save_data, checksum)
+                        cloud_sync_status = "failed" if upload_err else "synced"
+                        if not upload_err:
+                            cloud_last_sync = _now_str()
                     run_loading_screen(stdscr)
                     screen = "game"
                     status_msg = f"Welcome, {current_user}! Your journey begins."
 
-        # ── CREDITS ──
+        # ── CREDITS ───────────────────────────────────────────
         elif screen == "credits":
             if key in (27, 10, curses.KEY_ENTER, ord('q'), ord('Q')):
                 screen = "title"
 
-        # ── SETTINGS (pre-game) ──
+        # ── SETTINGS (pre-game) ───────────────────────────────
         elif screen == "settings_pre":
             if key == 27 or key in (10, curses.KEY_ENTER):
                 screen = "title"
@@ -371,7 +504,125 @@ def main(stdscr):
             else:
                 _handle_settings_key(key, settings_ui, standalone_settings)
 
-        # ── IN GAME ──
+        # ── SAVE SLOTS ────────────────────────────────────────
+        elif screen == "save_slots":
+            all_entries = list(pending_cloud_slots) + [{"_new": True}]
+            if key == 27:
+                screen = "title"
+            elif key == curses.KEY_UP:
+                save_slots_ui.selected = max(0, save_slots_ui.selected - 1)
+            elif key == curses.KEY_DOWN:
+                save_slots_ui.selected = min(len(all_entries)-1,
+                                             save_slots_ui.selected + 1)
+            elif key in (10, curses.KEY_ENTER):
+                chosen = all_entries[save_slots_ui.selected]
+                if chosen.get("_new"):
+                    gs = make_new_game(_default_founder(current_user), 0)
+                else:
+                    save_data, dl_err = cloud.download_save(chosen["id"])
+                    if save_data:
+                        save_game_from_cloud(current_user, save_data)
+                        gs = gs_from_cloud_data(save_data)
+                        cloud_sync_status = "synced"
+                        cloud_last_sync = _now_str()
+                    else:
+                        save_slots_ui.message = f"Failed to load: {dl_err}"
+                        continue
+                if gs is None:
+                    gs = make_new_game(_default_founder(current_user), 0)
+                run_loading_screen(stdscr)
+                screen = "game"
+                active_tab = 0
+
+        # ── SYNC CONFLICT ─────────────────────────────────────
+        elif screen == "sync_conflict":
+            if key == curses.KEY_UP:
+                conflict_sel = max(0, conflict_sel - 1)
+            elif key == curses.KEY_DOWN:
+                conflict_sel = min(len(CONFLICT_OPTIONS)-1, conflict_sel + 1)
+            elif key in (10, curses.KEY_ENTER):
+                local_save = load_game(current_user)
+                if conflict_sel == 0:
+                    # Upload local → overwrite cloud
+                    if local_save and cloud_user_id:
+                        save_data = save_game(local_save, current_user)
+                        checksum  = compute_checksum(save_data)
+                        cloud.upload_save(cloud_user_id, "autosave", save_data, checksum)
+                        cloud_sync_status = "synced"
+                        cloud_last_sync   = _now_str()
+                    gs = local_save or make_new_game(_default_founder(current_user), 0)
+                elif conflict_sel == 1:
+                    # Download cloud → overwrite local
+                    save_data, _ = cloud.download_save(conflict_cloud_slot_id)
+                    if save_data:
+                        save_game_from_cloud(current_user, save_data)
+                        gs = gs_from_cloud_data(save_data)
+                        cloud_sync_status = "synced"
+                        cloud_last_sync   = _now_str()
+                    else:
+                        gs = local_save or make_new_game(_default_founder(current_user), 0)
+                elif conflict_sel == 2:
+                    # Keep both: upload local as "local-backup", use local
+                    if local_save and cloud_user_id:
+                        save_data = save_game(local_save, current_user)
+                        checksum  = compute_checksum(save_data)
+                        cloud.upload_save(cloud_user_id, "local-backup", save_data, checksum)
+                    gs = local_save or make_new_game(_default_founder(current_user), 0)
+                else:
+                    # Stay offline
+                    gs = local_save or make_new_game(_default_founder(current_user), 0)
+                    cloud_user_id = None
+
+                if gs is None:
+                    gs = make_new_game(_default_founder(current_user), 0)
+                run_loading_screen(stdscr)
+                screen = "game"
+                active_tab = 0
+                status_msg = f"Welcome back, {current_user}!"
+
+        # ── ACCOUNT SCREEN ────────────────────────────────────
+        elif screen == "account":
+            if key == 27:
+                screen = "game" if gs else "title"
+            elif key == curses.KEY_LEFT:
+                account_ui.selected = (account_ui.selected - 1) % ACCOUNT_BUTTON_COUNT
+            elif key == curses.KEY_RIGHT:
+                account_ui.selected = (account_ui.selected + 1) % ACCOUNT_BUTTON_COUNT
+            elif key in (10, curses.KEY_ENTER):
+                action = account_button_label(account_ui.selected)
+                if action == "Sync Now":
+                    if cloud_user_id and gs and current_user:
+                        save_data = save_game(gs, current_user)
+                        checksum  = compute_checksum(save_data)
+                        _, err = cloud.upload_save(cloud_user_id, "autosave", save_data, checksum)
+                        if err:
+                            account_ui.message = f"Sync failed: {err}"
+                            cloud_sync_status  = "failed"
+                        else:
+                            account_ui.message  = "Cloud save complete."
+                            cloud_sync_status   = "synced"
+                            cloud_last_sync     = _now_str()
+                    else:
+                        account_ui.message = "Not signed in."
+                elif action == "Log Out":
+                    cloud.sign_out()
+                    cloud_user_id = None
+                    cloud_email   = None
+                    cloud_sync_status = ""
+                    account_ui.message = "Signed out."
+                    screen = "title"
+                    gs = None
+                    current_user = None
+                elif action == "Delete Local Session":
+                    cloud.sign_out()
+                    cloud_user_id = None
+                    cloud_email   = None
+                    cloud_sync_status = ""
+                    account_ui.message = "Local session cleared."
+                elif action == "Back":
+                    screen = "game" if gs else "title"
+
+        # ── IN GAME ───────────────────────────────────────────
         elif screen == "game":
             if gs is None:
                 screen = "title"
@@ -381,17 +632,38 @@ def main(stdscr):
                 if key == ord('q') or key == ord('Q'):
                     break
                 elif key == ord('r') or key == ord('R'):
+                    # Submit game run to cloud before resetting
+                    if cloud_user_id and gs:
+                        _submit_game_run(cloud, cloud_user_id, gs)
                     screen = "title"
                     gs = None
                 continue
 
-            # Global quit
             if key == ord('q') or key == ord('Q'):
                 if current_user:
-                    save_game(gs, current_user)
-                break
+                    save_data = save_game(gs, current_user)
+                    if cloud_user_id:
+                        checksum = compute_checksum(save_data)
+                        _, err = cloud.upload_save(cloud_user_id, "autosave", save_data, checksum)
+                        if err:
+                            add_to_sync_queue(current_user, save_data)
+                            cloud_sync_status = "pending"
+                        else:
+                            cloud_sync_status = "synced"
+                            cloud_last_sync = _now_str()
+                    status_msg = ""
+                gs = None
+                screen = "title"
+                title_sel = 0
+                active_tab = 0
+                continue
 
-            # Tab navigation
+            # Open account screen
+            if key == ord('a') or key == ord('A'):
+                account_ui = AccountUIState()
+                screen = "account"
+                continue
+
             if key == ord('\t'):
                 active_tab = (active_tab + 1) % len(TABS)
                 status_msg = f"Switched to: {TABS[active_tab]}"
@@ -401,16 +673,25 @@ def main(stdscr):
 
             tab = TABS[active_tab]
 
-            # N: advance month (any tab)
             if key in (ord('n'), ord('N')):
                 status_msg = advance_month(gs)
                 if current_user:
-                    save_game(gs, current_user)
+                    save_data = save_game(gs, current_user)
+                    if cloud_user_id:
+                        checksum = compute_checksum(save_data)
+                        _, err = cloud.upload_save(cloud_user_id, "autosave", save_data, checksum)
+                        if err:
+                            add_to_sync_queue(current_user, save_data)
+                            cloud_sync_status = "pending"
+                        else:
+                            cloud_sync_status = "synced"
+                            cloud_last_sync = _now_str()
                 if gs.months_elapsed >= DEMO_MONTH_LIMIT:
                     gs.demo_ended = True
+                    if cloud_user_id:
+                        _submit_game_run(cloud, cloud_user_id, gs)
                 continue
 
-            # Tab-specific keys
             if tab == "Dashboard":
                 if key == curses.KEY_UP:
                     dash_company_sel = max(0, dash_company_sel - 1)
@@ -468,7 +749,6 @@ def main(stdscr):
                             projects_ui.view = "list"
                     else:
                         _handle_new_project_keys(key, projects_ui, gs, status_msg)
-                        # Check if we just confirmed and should go back
                         if projects_ui.view == "list":
                             status_msg = projects_ui.message
 
@@ -479,7 +759,6 @@ def main(stdscr):
                     employees_ui.selected = min(len(gs.employees)-1,
                                                 employees_ui.selected + 1)
                 elif key in (ord('h'), ord('H')):
-                    # Hire a random employee
                     names = ["Ama Kwei", "Taro Naka", "Zara Malik", "Ivan Petrov",
                              "Lena Chen", "Rafi Hassan", "Suki Park", "Omar Ali"]
                     if gs.active_companies():
@@ -539,6 +818,65 @@ def main(stdscr):
                 else:
                     _handle_settings_key(key, settings_ui, gs.settings)
 
+
+# ─────────────────────── HELPERS ──────────────────────────────
+
+def _default_founder(username: str) -> Founder:
+    return Founder(
+        username=username or "Founder",
+        background_idx=0,
+        reputation=20, burnout=0,
+        skill_prototyping=40, skill_sales=20,
+        skill_tech=35, skill_management=20,
+        total_tokens_used=0,
+    )
+
+def _post_sign_in(state: SignInState, name: str, profile: Optional[dict]):
+    state.success_name   = name
+    state.success_date   = profile.get("updated_at", "—")[:10] if profile else "—"
+    state.success_status = "Rookie Founder"
+    state.step = "welcome"
+
+def _do_enter_game(stdscr, gs):
+    run_loading_screen(stdscr)
+
+def _save_summary(gs: Optional[GameState]) -> dict:
+    if gs is None:
+        return {}
+    return {
+        "last_played": f"{MONTH_NAMES[gs.month-1]} {gs.year}",
+        "cash":        gs.total_cash(),
+        "projects":    len(gs.projects),
+        "months_elapsed": gs.months_elapsed,
+        "companies":   len(gs.active_companies()),
+    }
+
+def _now_str() -> str:
+    import datetime
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+def _submit_game_run(cloud: CloudService, user_id: str, gs: GameState):
+    run_data = {
+        "months_survived":   gs.months_elapsed,
+        "companies_created": len(gs.companies),
+        "projects_launched": len([p for p in gs.projects if p.status in ("Launched", "Growing")]),
+        "projects_failed":   len([p for p in gs.projects if p.status == "Failed"]),
+        "total_revenue":     sum(p.lifetime_revenue for p in gs.projects),
+        "total_users":       sum(p.users for p in gs.projects),
+        "final_reputation":  gs.founder.reputation if gs.founder else 0,
+        "final_burnout":     gs.founder.burnout if gs.founder else 0,
+        "final_rank":        _rank(gs),
+    }
+    cloud.submit_game_run(user_id, run_data)
+
+def _rank(gs: GameState) -> str:
+    rev = sum(p.lifetime_revenue for p in gs.projects)
+    if rev >= 100_000: return "Unicorn Chaser"
+    if rev >= 50_000:  return "Series A Hopeful"
+    if rev >= 10_000:  return "Ramen Profitable"
+    if rev >= 1_000:   return "Side Project"
+    return "Vibe Coder"
+
 def _handle_settings_key(key, ui: SettingsUIState, settings: dict):
     k = ui.keys[ui.focused]
     if k in SETTINGS_OPTIONS:
@@ -575,11 +913,11 @@ def _handle_new_company_keys(key, ui: CompaniesUIState, gs: GameState):
         elif 32 <= key < 127 and len(f["value"]) < f.get("max", 30):
             f["value"] += chr(key)
     if key in (10, curses.KEY_ENTER) and ui.new_focused == len(ui.new_fields) - 1:
-        name = ui.new_fields[0]["value"].strip() or "New Venture"
-        legal = COMPANY_LEGAL_STYLES[ui.new_fields[1]["selected"]]
-        focus = COMPANY_FOCUS_AREAS[ui.new_fields[2]["selected"]]
+        name    = ui.new_fields[0]["value"].strip() or "New Venture"
+        legal   = COMPANY_LEGAL_STYLES[ui.new_fields[1]["selected"]]
+        focus   = COMPANY_FOCUS_AREAS[ui.new_fields[2]["selected"]]
         funding = FUNDING_STYLES[ui.new_fields[3]["selected"]]
-        risk = RISK_APPETITES[ui.new_fields[4]["selected"]]
+        risk    = RISK_APPETITES[ui.new_fields[4]["selected"]]
         try:    cash = int(ui.new_fields[5]["value"])
         except: cash = 2000
         cid = len(gs.companies)
@@ -649,4 +987,3 @@ def _handle_new_project_keys(key, ui: ProjectsUIState, gs: GameState, status_msg
             ui.message = f"'{name}' added to your queue!"
             ui.view = "list"
             ui.new_step = 0
-
