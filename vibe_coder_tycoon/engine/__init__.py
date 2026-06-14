@@ -18,6 +18,8 @@ from .systems import companies      # registers company/office actions as a side
 from .systems import employees       # registers employee actions as a side-effect
 from .systems import mental_health   # registers mental-health actions (Phase 6)
 from .systems import models_ai       # registers model/IDE/subscription actions (Phase 7)
+from .systems import templates        # registers template actions (Phase 8)
+from .systems import infra            # registers infrastructure actions (Phase 9)
 
 
 def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
@@ -100,6 +102,10 @@ def advance_month(gs: GameState) -> str:
         elif p.status in ("Launched", "Growing"):
             prod_events = products.monthly_product_tick(gs, p, date_str)
             events_this_month.extend(prod_events)
+
+    # Phase 9: infrastructure settlement (hosting cost, outages, compute sales).
+    # Runs after the product tick so it bills against this month's user base.
+    events_this_month.extend(infra.monthly_infra_settlement(gs))
 
     # Phase 6: mental-health settlement (employee sanity, conditions, founder)
     events_this_month.extend(mental_health.monthly_tick(gs))

@@ -791,3 +791,80 @@ SUBSCRIPTION_TIERS = [
      "open_only": True, "desc": "Run open-weight models on your own hardware."},
 ]
 
+
+# ─────────────────────── PHASE 8 — TEMPLATES ──────────────────
+#
+# Templates are company-scoped internal assets built through the development
+# phase (a Lean-MVP-style build with no market launch). Their bonuses are
+# derived from the Design/Tech scores achieved during the build, so a template
+# built later with better models/IDEs/teams comes out stronger (versioning).
+# `base_days` is the build length; `build_cost` is the up-front cash to start.
+
+TEMPLATE_TYPES = [
+    {"name": "SaaS Boilerplate", "base_days": 20, "build_cost": 400,
+     "desc": "Auth, billing, and dashboard scaffold. Jump-starts SaaS builds."},
+    {"name": "Mobile Starter", "base_days": 18, "build_cost": 350,
+     "desc": "Cross-platform shell with navigation and state baked in."},
+    {"name": "Auth Framework", "base_days": 15, "build_cost": 300,
+     "desc": "Battle-tested login, sessions, and permissions."},
+    {"name": "AI Agent Scaffold", "base_days": 26, "build_cost": 650,
+     "desc": "Prompt routing, tool calls, and memory plumbing."},
+    {"name": "API Gateway Kit", "base_days": 20, "build_cost": 450,
+     "desc": "Rate limiting, keys, and usage metering out of the box."},
+    {"name": "Payments Module", "base_days": 16, "build_cost": 400,
+     "desc": "Checkout, subscriptions, and webhooks pre-wired."},
+]
+
+
+# ─────────────────────── PHASE 9 — INFRASTRUCTURE ─────────────
+#
+# Hosting scales cost with a company's live user base and caps capacity (over
+# it, outages strike). GPUs and datacenters reduce per-token dev cost; a
+# datacenter also unlocks selling excess compute for passive revenue.
+
+HOSTING_PROVIDERS = [
+    {"name": "Free Tier", "base_cost": 0, "cost_per_user": 0.0, "capacity": 200,
+     "desc": "Generous until it isn't. Falls over under real load."},
+    {"name": "Hobby Cloud", "base_cost": 50, "cost_per_user": 0.05, "capacity": 2_000,
+     "desc": "Cheap and cheerful. Fine for early traction."},
+    {"name": "Pro Cloud", "base_cost": 300, "cost_per_user": 0.03, "capacity": 25_000,
+     "desc": "Autoscaling, real SLAs, real invoices."},
+    {"name": "Enterprise Cloud", "base_cost": 1_500, "cost_per_user": 0.02, "capacity": 250_000,
+     "desc": "Multi-region, six-figure logos, near-infinite scale."},
+    {"name": "Self-Hosted Rack", "base_cost": 800, "cost_per_user": 0.01, "capacity": 1_000_000,
+     "desc": "Your hardware, your rules, your pager at 3am."},
+]
+
+# GPU generations — each owned GPU reduces dev token cost. `token_reduction` is
+# the per-unit reduction when new; benefit decays as the card ages past 4 years.
+GPU_GENERATIONS = [
+    {"name": "Vivid V100", "year": 2022, "cost": 8_000, "token_reduction": 0.04,
+     "desc": "Workhorse of the early boom. Slow by today's standards."},
+    {"name": "Ampere A100", "year": 2023, "cost": 15_000, "token_reduction": 0.06,
+     "desc": "The datacenter standard. Still pricey on the resale market."},
+    {"name": "Hopper H100", "year": 2024, "cost": 30_000, "token_reduction": 0.09,
+     "desc": "The one everyone fought over. Liquid-cooled bragging rights."},
+    {"name": "Blackwell B200", "year": 2025, "cost": 45_000, "token_reduction": 0.12,
+     "desc": "Frontier-class. Melts power budgets and competitors."},
+    {"name": "Rubin R300", "year": 2027, "cost": 70_000, "token_reduction": 0.16,
+     "desc": "Next-gen accelerator. If you can get an allocation."},
+]
+
+# Datacenter tiers — large capital unlock. Tier 0 = none. Higher tiers cut
+# per-token cost further and add `compute_capacity` units that can be sold.
+DATACENTER_TIERS = [
+    {"tier": 0, "name": "No Datacenter", "cost": 0, "per_token_reduction": 0.0,
+     "compute_capacity": 0, "desc": "Renting compute like everyone else."},
+    {"tier": 1, "name": "Server Closet", "cost": 50_000, "per_token_reduction": 0.08,
+     "compute_capacity": 100, "desc": "A rack and a prayer. Trims token costs a bit."},
+    {"tier": 2, "name": "Colo Cage", "cost": 200_000, "per_token_reduction": 0.16,
+     "compute_capacity": 500, "desc": "Leased cage in a real facility."},
+    {"tier": 3, "name": "Regional DC", "cost": 1_000_000, "per_token_reduction": 0.24,
+     "compute_capacity": 2_500, "desc": "Your own building. Can host player models."},
+    {"tier": 4, "name": "Hyperscale DC", "cost": 5_000_000, "per_token_reduction": 0.32,
+     "compute_capacity": 12_000, "desc": "Foundation-model grade. Sell the excess."},
+]
+
+# Passive revenue per sold compute unit per month (before demand/quality mods).
+COMPUTE_UNIT_PRICE = 9.0
+

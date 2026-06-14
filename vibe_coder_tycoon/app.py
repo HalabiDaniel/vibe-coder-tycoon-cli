@@ -840,6 +840,10 @@ def main(stdscr):
                                               company_id=sel_c.id)
                             companies_ui.message = ("✓ " if result.ok else "✗ ") + result.message
                             status_msg = result.message
+                        elif key in (ord('i'), ord('I')):
+                            companies_ui.view = "infra"
+                            companies_ui.infra_gpu_sel = 0
+                            companies_ui.message = ""
                         elif key in (ord('h'), ord('H')):
                             focus_d = get_focus_data(sel_c.focus_area)
                             if focus_d and focus_d["name"] == "Holding Company":
@@ -871,6 +875,41 @@ def main(stdscr):
                             else:
                                 companies_ui.message = "✗ Nothing to sweep."
                             status_msg = companies_ui.message
+
+                elif companies_ui.view == "infra":
+                    from .constants import HOSTING_PROVIDERS, GPU_GENERATIONS
+                    sel_c = (gs.companies[companies_ui.selected]
+                             if gs.companies and 0 <= companies_ui.selected < len(gs.companies)
+                             else None)
+                    if key == 27:
+                        companies_ui.view = "list"
+                        companies_ui.message = ""
+                    elif sel_c is not None:
+                        if key == curses.KEY_UP:
+                            companies_ui.infra_gpu_sel = max(0, companies_ui.infra_gpu_sel - 1)
+                        elif key == curses.KEY_DOWN:
+                            companies_ui.infra_gpu_sel = min(len(GPU_GENERATIONS) - 1,
+                                                             companies_ui.infra_gpu_sel + 1)
+                        elif key in (ord('p'), ord('P')):
+                            names = [h["name"] for h in HOSTING_PROVIDERS]
+                            cur = names.index(sel_c.hosting_provider) if sel_c.hosting_provider in names else 0
+                            nxt = names[(cur + 1) % len(names)]
+                            result = dispatch(gs, "set_hosting", company_id=sel_c.id, provider=nxt)
+                            companies_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                        elif key in (ord('g'), ord('G')):
+                            gpu = GPU_GENERATIONS[companies_ui.infra_gpu_sel]
+                            result = dispatch(gs, "buy_gpu", company_id=sel_c.id, gpu_name=gpu["name"])
+                            companies_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                        elif key in (ord('d'), ord('D')):
+                            result = dispatch(gs, "upgrade_datacenter", company_id=sel_c.id)
+                            companies_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                        elif key in (ord('s'), ord('S')):
+                            result = dispatch(gs, "toggle_compute_sale", company_id=sel_c.id)
+                            companies_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
 
                 elif companies_ui.view == "new":
                     if key == 27:
@@ -986,6 +1025,12 @@ def main(stdscr):
                                               if gs.active_model in names else 0)
                         else:
                             status_msg = "Create a company first before adding a project."
+                    elif key in (ord('b'), ord('B')):
+                        if gs.active_companies():
+                            projects_ui.view = "templates"
+                            projects_ui.tmpl_message = ""
+                        else:
+                            status_msg = "Create a company first."
                     elif key in (10, curses.KEY_ENTER):
                         if _visible and 0 <= projects_ui.selected < len(_visible):
                             p = _visible[projects_ui.selected]
@@ -1041,6 +1086,29 @@ def main(stdscr):
                                 result = dispatch(gs, "product_set_auto_update",
                                                   project_idx=p_idx, interval=new_interval)
                                 status_msg = ("✓ " if result.ok else "✗ ") + result.message
+
+                elif projects_ui.view == "templates":
+                    active = gs.active_companies()
+                    from .constants import TEMPLATE_TYPES
+                    if key == 27:
+                        projects_ui.view = "list"
+                        projects_ui.tmpl_message = ""
+                    elif key == curses.KEY_UP:
+                        projects_ui.tmpl_type_idx = max(0, projects_ui.tmpl_type_idx - 1)
+                    elif key == curses.KEY_DOWN:
+                        projects_ui.tmpl_type_idx = min(len(TEMPLATE_TYPES) - 1,
+                                                        projects_ui.tmpl_type_idx + 1)
+                    elif key in (ord('c'), ord('C')):
+                        if active:
+                            projects_ui.tmpl_company_idx = (projects_ui.tmpl_company_idx + 1) % len(active)
+                    elif key in (10, curses.KEY_ENTER):
+                        if active:
+                            ci = max(0, min(projects_ui.tmpl_company_idx, len(active) - 1))
+                            ttype = TEMPLATE_TYPES[projects_ui.tmpl_type_idx]["name"]
+                            result = dispatch(gs, "build_template",
+                                              company_id=active[ci].id, template_type=ttype)
+                            projects_ui.tmpl_message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
 
                 elif projects_ui.view == "new":
                     if key == 27:
@@ -1378,6 +1446,14 @@ def _handle_new_project_keys(key, ui: ProjectsUIState, gs: GameState, status_msg
             ui.new_company_idx = min(len(active)-1, ui.new_company_idx + 1)
         elif key in (10, curses.KEY_ENTER):
             ui.new_step = 1
+            # Phase 8: populate the (company-filtered) template selector.
+            if len(ui.new_fields) > 8:
+                from .engine.systems.templates import templates_for_company
+                company = active[ui.new_company_idx] if active else None
+                tmpls = templates_for_company(gs, company.id) if company else []
+                tf = ui.new_fields[8]
+                tf["options"] = ["None"] + [t.name for t in tmpls]
+                tf["selected"] = 0
 
     elif ui.new_step == 1:
         idx = ui.new_focused
@@ -1426,12 +1502,24 @@ def _handle_new_project_keys(key, ui: ProjectsUIState, gs: GameState, status_msg
                     ui.message = f"✗ {reason}"
                     return
 
+            # Phase 8: resolve the optional template selection to an id.
+            template_id = -1
+            if company and len(ui.new_fields) > 8:
+                tf = ui.new_fields[8]
+                tsel = tf.get("selected", 0)
+                if tsel > 0:
+                    from .engine.systems.templates import templates_for_company
+                    tmpls = templates_for_company(gs, company.id)
+                    if 0 <= tsel - 1 < len(tmpls):
+                        template_id = gs.templates.index(tmpls[tsel - 1])
+
             p = Project(
                 name=name, ptype=ptype, model=sub_name, stack=stack, niche=niche,
                 company_id=cid, status="In Dev", progress=0,
                 revenue=0, users=0, morale=80, tokens_used=0,
                 scope=scope, budget=budget, dev_weeks=dev_weeks,
                 dev_total_days=scope_data["base_days"],
+                template_id=template_id,
             )
             gs.projects.append(p)
             p_idx = len(gs.projects) - 1

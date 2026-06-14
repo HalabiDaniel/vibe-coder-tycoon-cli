@@ -30,6 +30,9 @@ def start_dev_session(gs: GameState, project_idx: int) -> None:
     p.hype = 30
     p.faked_features = []
     p.paused_dev = False
+    # Phase 8: a chosen template gives a Design/Tech head-start, shorter timeline.
+    from .templates import apply_template_to_project
+    apply_template_to_project(gs, p)
     p.dev_session = DevSession(
         terminal_log=[f"[Init] Starting dev on {p.name!r} — Scope: {p.scope}, Days: {p.dev_total_days}"],
     )
@@ -87,6 +90,15 @@ def tick_dev_project(gs: GameState, p) -> list:
     tech_team_mult = team_bonus["tech_mult"]
     bug_team_mult = team_bonus["bug_mult"]
 
+    # Phase 9: GPUs/datacenter reduce per-token dev cost for the company.
+    from .infra import get_token_cost_multiplier
+    if company:
+        token_cost_mult *= get_token_cost_multiplier(gs, company)
+
+    # Phase 8: a chosen template suppresses bug generation.
+    from .templates import template_bug_multiplier
+    bug_template_mult = template_bug_multiplier(gs, p)
+
     days_this_month = 28 + random.randint(-3, 5)
     interrupted = False
 
@@ -103,7 +115,7 @@ def tick_dev_project(gs: GameState, p) -> list:
         p.tech_score   = min(100.0, p.tech_score   + tech_gain)
 
         # Bug generation: vibe multiplies chaos, team QA + IDE suppress it
-        if random.random() < sub["bug_risk"] * vibe_mult * 0.03 * bug_team_mult * bug_tool_mult:
+        if random.random() < sub["bug_risk"] * vibe_mult * 0.03 * bug_team_mult * bug_tool_mult * bug_template_mult:
             p.bug_count += 1
 
         # Token consumption per day (reduced by focus token_cost_mult)
@@ -134,7 +146,10 @@ def tick_dev_project(gs: GameState, p) -> list:
 
     if p.dev_day >= p.dev_total_days and not ds.pending_interruption:
         _finalize_dev(gs, p)
-        events.append(("💻", f"{p.name} dev complete! Ready for QA/Launch.", "good", date_str))
+        if getattr(p, "is_template", False):
+            events.append(("🧩", f"Template '{p.template_type}' built and ready to use!", "good", date_str))
+        else:
+            events.append(("💻", f"{p.name} dev complete! Ready for QA/Launch.", "good", date_str))
 
     return events
 
@@ -218,6 +233,17 @@ def _finalize_dev(gs: GameState, p) -> None:
     for ev in xp_events:
         _add_log(p.dev_session, ev[1])
 
+    # Phase 8: template builds never launch — convert to a reusable asset.
+    if getattr(p, "is_template", False):
+        from .templates import finalize_template  # lazy
+        t = finalize_template(gs, p)
+        _add_log(
+            p.dev_session,
+            f"[Template] {t.name} ready — Design+{t.design_bonus:.0f} Tech+{t.tech_bonus:.0f} "
+            f"Time-{t.time_reduction:.0%} Bugs-{t.bug_reduction:.0%}",
+        )
+        return
+
     _add_log(
         p.dev_session,
         f"[Complete] Quality: {p.quality_score}/100  Hype: {p.hype}  "
@@ -226,6 +252,8 @@ def _finalize_dev(gs: GameState, p) -> None:
 
 
 def _add_log(ds: DevSession, line: str) -> None:
+    if ds is None:
+        return
     ds.terminal_log.append(line)
     if len(ds.terminal_log) > 20:
         ds.terminal_log = ds.terminal_log[-20:]

@@ -20,8 +20,9 @@ from ...engine.systems.companies import (
 
 @dataclass
 class CompaniesUIState:
-    view: str = "list"       # "list" | "detail" | "new" | "deposit" | "withdraw" | "holding"
+    view: str = "list"       # "list" | "new" | "deposit" | "withdraw" | "holding" | "infra"
     selected: int = 0
+    infra_gpu_sel: int = 0   # selection index into available GPU generations
     new_fields: list = field(default_factory=lambda: [
         {"label": "Company Name",      "value": "", "max": 30, "type": "text"},
         {"label": "Legal Structure",   "value": "", "type": "options",
@@ -54,6 +55,11 @@ def draw_companies(win, gs: GameState, ui: CompaniesUIState):
     if ui.view == "holding":
         if gs.companies and 0 <= ui.selected < len(gs.companies):
             _draw_holding_view(win, gs, ui, gs.companies[ui.selected], h, w)
+        return
+
+    if ui.view == "infra":
+        if gs.companies and 0 <= ui.selected < len(gs.companies):
+            _draw_infra_view(win, gs, ui, gs.companies[ui.selected], h, w)
         return
 
     # ── List header ───────────────────────────────────────────────
@@ -91,7 +97,7 @@ def draw_companies(win, gs: GameState, ui: CompaniesUIState):
         _draw_company_detail(win, gs, ui, c, y, h, w)
 
     safe_addstr(win, h - 4, 2,
-                "↑↓:select  D:deposit  W:withdraw  T:auto-deposit  C:cover  O:upgrade office  L:upgrade legal  H:holding",
+                "↑↓:sel  D:deposit  W:withdraw  T:auto-dep  C:cover  O:office  L:legal  I:infra  H:holding",
                 curses.color_pair(PAIR_MUTED))
     if ui.message:
         mp = PAIR_ACCENT if "✓" in ui.message else PAIR_DANGER
@@ -289,6 +295,106 @@ def _draw_holding_view(win, gs: GameState, ui, holding: Company, h: int, w: int)
                     "S: sweep all subsidiary cash up to holding",
                     curses.color_pair(PAIR_BUTTON) | curses.A_BOLD)
     safe_addstr(win, h - 3, 2, "Esc: back", curses.color_pair(PAIR_MUTED))
+    if ui.message:
+        mp = PAIR_ACCENT if "✓" in ui.message else PAIR_DANGER
+        safe_addstr(win, h - 2, 2, ui.message[:w - 4], curses.color_pair(mp) | curses.A_BOLD)
+
+
+def _draw_infra_view(win, gs: GameState, ui, c: Company, h: int, w: int):
+    from ...constants import HOSTING_PROVIDERS, GPU_GENERATIONS, DATACENTER_TIERS
+    from ...engine.systems.infra import (
+        get_hosting, get_datacenter, company_active_users,
+        get_token_cost_multiplier, hosting_monthly_cost, compute_sale_revenue,
+        available_gpus,
+    )
+
+    y = 3
+    safe_addstr(win, y, 2, f" INFRASTRUCTURE: {c.name} ",
+                curses.color_pair(PAIR_TITLE) | curses.A_BOLD)
+    y += 2
+
+    mid = w // 2
+    users = company_active_users(gs, c)
+    host = get_hosting(c.hosting_provider)
+    cap = host["capacity"]
+    over = users > cap
+    load_p = PAIR_DANGER if over else (PAIR_WARN if users > cap * 0.75 else PAIR_ACCENT)
+
+    # ── Left column: hosting + datacenter ──────────────────────
+    lx = 4
+    ly = y
+    safe_addstr(win, ly, lx, "HOSTING  [P: cycle provider]",
+                curses.color_pair(PAIR_TITLE) | curses.A_BOLD); ly += 1
+    safe_addstr(win, ly, lx, f"Provider : {c.hosting_provider}",
+                curses.color_pair(PAIR_ACCENT) | curses.A_BOLD); ly += 1
+    safe_addstr(win, ly, lx, f"Load     : {users:,} / {cap:,} users",
+                curses.color_pair(load_p)); ly += 1
+    if over:
+        safe_addstr(win, ly, lx, "⚠ OVER CAPACITY — outage risk!",
+                    curses.color_pair(PAIR_DANGER) | curses.A_BOLD); ly += 1
+    safe_addstr(win, ly, lx, f"Est. cost: ${hosting_monthly_cost(gs, c):,}/mo",
+                curses.color_pair(PAIR_MUTED)); ly += 2
+
+    dc = get_datacenter(c.datacenter_tier)
+    nxt = get_datacenter(c.datacenter_tier + 1)
+    safe_addstr(win, ly, lx, "DATACENTER  [D: upgrade]",
+                curses.color_pair(PAIR_TITLE) | curses.A_BOLD); ly += 1
+    safe_addstr(win, ly, lx, f"Tier {c.datacenter_tier}: {dc['name']}",
+                curses.color_pair(PAIR_ACCENT) | curses.A_BOLD); ly += 1
+    safe_addstr(win, ly, lx, f"Token cut: {dc['per_token_reduction']:.0%}   "
+                f"Compute: {c.compute_capacity:,}u", curses.color_pair(PAIR_MUTED)); ly += 1
+    if nxt["tier"] > c.datacenter_tier:
+        ok = "✓" if c.cash >= nxt["cost"] else "✗"
+        safe_addstr(win, ly, lx, f"[D] →{nxt['name']} ${nxt['cost']:,} {ok}",
+                    curses.color_pair(PAIR_BUTTON) | curses.A_BOLD); ly += 1
+    else:
+        safe_addstr(win, ly, lx, "Max datacenter tier reached", curses.color_pair(PAIR_MUTED)); ly += 1
+    ly += 1
+
+    sale_label = "ON" if c.compute_for_sale else "OFF"
+    sale_p = PAIR_ACCENT if c.compute_for_sale else PAIR_MUTED
+    safe_addstr(win, ly, lx, "COMPUTE SALES  [S: toggle]",
+                curses.color_pair(PAIR_TITLE) | curses.A_BOLD); ly += 1
+    safe_addstr(win, ly, lx, f"Selling : [{sale_label}]", curses.color_pair(sale_p) | curses.A_BOLD)
+    if c.compute_for_sale and c.compute_capacity > 0:
+        safe_addstr(win, ly, lx + 18, f"~${compute_sale_revenue(gs, c):,}/mo",
+                    curses.color_pair(PAIR_ACCENT))
+    ly += 1
+    if c.datacenter_tier <= 0:
+        safe_addstr(win, ly, lx, "(needs a datacenter)", curses.color_pair(PAIR_MUTED)); ly += 1
+
+    # ── Right column: GPU shop + inventory ─────────────────────
+    rx = mid + 2
+    ry = y
+    tok_mult = get_token_cost_multiplier(gs, c)
+    safe_addstr(win, ry, rx, "GPUs  [↑↓ select, G: buy]",
+                curses.color_pair(PAIR_TITLE) | curses.A_BOLD); ry += 1
+    safe_addstr(win, ry, rx, f"Owned: {len(c.gpu_inventory)}   "
+                f"Dev token cost: {tok_mult:.0%}",
+                curses.color_pair(PAIR_ACCENT)); ry += 1
+    hline(win, ry, rx, w - rx - 2, PAIR_BORDER); ry += 1
+
+    avail = {g["name"] for g in available_gpus(gs)}
+    ui.infra_gpu_sel = max(0, min(ui.infra_gpu_sel, len(GPU_GENERATIONS) - 1))
+    for i, g in enumerate(GPU_GENERATIONS):
+        if ry >= h - 5:
+            break
+        unlocked = g["name"] in avail
+        is_sel = (i == ui.infra_gpu_sel)
+        owned_n = sum(1 for gp in c.gpu_inventory if isinstance(gp, dict) and gp.get("name") == g["name"])
+        rp = PAIR_HIGHLIGHT if is_sel else PAIR_PANEL
+        prefix = "▶ " if is_sel else "  "
+        lock = "" if unlocked else f" 🔒{g['year']}"
+        own = f" x{owned_n}" if owned_n else ""
+        safe_addstr(win, ry, rx, " " * (w - rx - 2), curses.color_pair(rp))
+        safe_addstr(win, ry, rx,
+                    f"{prefix}{g['name']:<14} ${g['cost']:>6,}  -{g['token_reduction']:.0%}{own}{lock}",
+                    curses.color_pair(rp if is_sel else (PAIR_ACCENT if unlocked else PAIR_MUTED)))
+        ry += 1
+
+    safe_addstr(win, h - 3, 2,
+                "P:hosting  D:datacenter  S:compute-sale  ↑↓:GPU  G:buy GPU  Esc:back",
+                curses.color_pair(PAIR_MUTED))
     if ui.message:
         mp = PAIR_ACCENT if "✓" in ui.message else PAIR_DANGER
         safe_addstr(win, h - 2, 2, ui.message[:w - 4], curses.color_pair(mp) | curses.A_BOLD)

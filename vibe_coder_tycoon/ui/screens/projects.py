@@ -32,7 +32,7 @@ def _btn(win, y: int, x: int, label: str, pair: int):
 
 @dataclass
 class ProjectsUIState:
-    view: str = "list"      # "list" | "new" | "dev"
+    view: str = "list"      # "list" | "new" | "dev" | "templates"
     selected: int = 0
     filter_status: str = "All"
     new_fields: list = field(default_factory=lambda: [
@@ -44,18 +44,27 @@ class ProjectsUIState:
         {"label": "Feature Scope",   "type": "options", "options": ["Lean MVP", "Standard", "Feature-Rich", "Overengineered"], "selected": 0},
         {"label": "Budget (USD)",    "value": "500",    "max": 10, "type": "text"},
         {"label": "Dev Time (weeks)","value": "4",      "max": 3,  "type": "text"},
+        {"label": "Template",        "type": "options", "options": ["None"], "selected": 0},
     ])
     new_focused: int = 0
     new_step: int = 0   # 0=company select, 1=config, 2=review
     new_company_idx: int = 0
     message: str = ""
     dev_project_idx: int = -1   # index into gs.projects for dev view
+    # Phase 8 — template build sub-view
+    tmpl_company_idx: int = 0
+    tmpl_type_idx: int = 0
+    tmpl_message: str = ""
 
 def draw_projects(win, gs: GameState, ui: ProjectsUIState):
     h, w = win.getmaxyx()
 
     if ui.view == "new":
         _draw_new_project_wizard(win, gs, ui)
+        return
+
+    if ui.view == "templates":
+        _draw_templates_view(win, gs, ui)
         return
 
     y = 3
@@ -67,7 +76,7 @@ def draw_projects(win, gs: GameState, ui: ProjectsUIState):
         fp = PAIR_TAB_ACTIVE if is_sel else PAIR_TAB_INACTIVE
         safe_addstr(win, y, fx, f" {f} ", curses.color_pair(fp))
         fx += len(f) + 3
-    safe_addstr(win, y, w-20, "[ N: New Project ]",
+    safe_addstr(win, y, w-30, "[ N: New ] [ B: Templates ]",
                 curses.color_pair(PAIR_BUTTON) | curses.A_BOLD)
     y += 2
 
@@ -188,7 +197,7 @@ def draw_projects(win, gs: GameState, ui: ProjectsUIState):
                         break
 
     safe_addstr(win, h-4, 2,
-                "Up/Down: select  |  ◄/►: filter  |  N: new  |  Enter: dev  |  U/M/V/S/A: product actions",
+                "↑↓:select  ◄/►:filter  N:new  B:templates  Enter:dev  U/M/V/S/A:product actions",
                 curses.color_pair(PAIR_MUTED))
 
 def _draw_new_project_wizard(win, gs: GameState, ui: ProjectsUIState):
@@ -280,7 +289,15 @@ def _draw_new_project_wizard(win, gs: GameState, ui: ProjectsUIState):
         active = gs.active_companies()
         company_name = active[ui.new_company_idx].name if active else "None"
 
-        draw_box(win, y, bx, 18, bw, PAIR_BORDER, "PROJECT SUMMARY", PAIR_TITLE)
+        tmpl_field = ui.new_fields[8] if len(ui.new_fields) > 8 else None
+        tmpl_name = "—"
+        if tmpl_field:
+            opts = tmpl_field.get("options", ["None"])
+            sel = tmpl_field.get("selected", 0)
+            if 0 <= sel < len(opts):
+                tmpl_name = opts[sel]
+
+        draw_box(win, y, bx, 19, bw, PAIR_BORDER, "PROJECT SUMMARY", PAIR_TITLE)
         review_rows = [
             ("Company",        company_name),
             ("Name",           name),
@@ -289,6 +306,7 @@ def _draw_new_project_wizard(win, gs: GameState, ui: ProjectsUIState):
             ("Stack",          stack),
             ("Niche",          niche),
             ("Feature Scope",  scope),
+            ("Template",       tmpl_name),
             ("Budget",         f"${budget:,}"),
             ("Dev Time",       f"{weeks} weeks"),
             ("Est. Cost",      f"${cost_est:,}"),
@@ -304,7 +322,7 @@ def _draw_new_project_wizard(win, gs: GameState, ui: ProjectsUIState):
                  PAIR_WARN  if val == "MEDIUM" else PAIR_ACCENT
             safe_addstr(win, ry, bx+24, val, curses.color_pair(vp) | curses.A_BOLD)
 
-        btn_y = y + 16
+        btn_y = y + 17
         safe_addstr(win, btn_y, bx+4, "[ Confirm & Start Project ]",
                     curses.color_pair(PAIR_BUTTON_FOCUS) | curses.A_BOLD)
         safe_addstr(win, btn_y, bx+34, "[ Go Back ]",
@@ -316,4 +334,101 @@ def _draw_new_project_wizard(win, gs: GameState, ui: ProjectsUIState):
 
         safe_addstr(win, h-3, 2, "Enter: start project  |  Esc: back to config",
                     curses.color_pair(PAIR_MUTED))
+
+
+def _draw_templates_view(win, gs: GameState, ui: ProjectsUIState):
+    from ...engine.systems.templates import templates_for_company, get_template_def
+
+    h, w = win.getmaxyx()
+    safe_addstr(win, 3, 2, " TEMPLATE WORKSHOP ", curses.color_pair(PAIR_TITLE) | curses.A_BOLD)
+    safe_addstr(win, 3, 24, "Internal assets that boost future builds",
+                curses.color_pair(PAIR_MUTED))
+
+    active = gs.active_companies()
+    if not active:
+        safe_addstr(win, 6, 4, "Create a company first.", curses.color_pair(PAIR_DANGER))
+        safe_addstr(win, h-3, 2, "Esc: back", curses.color_pair(PAIR_MUTED))
+        return
+
+    ui.tmpl_company_idx = max(0, min(ui.tmpl_company_idx, len(active) - 1))
+    company = active[ui.tmpl_company_idx]
+    ui.tmpl_type_idx = max(0, min(ui.tmpl_type_idx, len(TEMPLATE_TYPES) - 1))
+
+    mid = w // 2
+
+    # ── Left: build a new template ─────────────────────────────
+    y = 5
+    safe_addstr(win, y, 2, "BUILD NEW TEMPLATE", curses.color_pair(PAIR_TITLE) | curses.A_BOLD)
+    y += 1
+    hline(win, y, 2, mid - 4, PAIR_BORDER); y += 1
+
+    safe_addstr(win, y, 4, "Company  ‹C›:", curses.color_pair(PAIR_MUTED))
+    safe_addstr(win, y, 18, f"{company.name}  (${company.cash:,})",
+                curses.color_pair(PAIR_ACCENT) | curses.A_BOLD)
+    y += 2
+
+    tdef = TEMPLATE_TYPES[ui.tmpl_type_idx]
+    safe_addstr(win, y, 4, "Type  ‹↑↓›:", curses.color_pair(PAIR_MUTED))
+    y += 1
+    for i, t in enumerate(TEMPLATE_TYPES):
+        is_sel = (i == ui.tmpl_type_idx)
+        rp = PAIR_HIGHLIGHT if is_sel else PAIR_PANEL
+        prefix = "▶ " if is_sel else "  "
+        safe_addstr(win, y, 4, " " * (mid - 8), curses.color_pair(rp))
+        safe_addstr(win, y, 4,
+                    f"{prefix}{t['name']:<20} {t['base_days']}d  ${t['build_cost']:,}",
+                    curses.color_pair(rp))
+        y += 1
+
+    y += 1
+    safe_addstr(win, y, 4, tdef["desc"][:mid - 6], curses.color_pair(PAIR_MUTED) | curses.A_DIM)
+    y += 2
+    can_afford = company.cash >= tdef["build_cost"]
+    bp = PAIR_BUTTON_FOCUS if can_afford else PAIR_MUTED
+    safe_addstr(win, y, 4, f"[ Enter: Build {tdef['name']} (${tdef['build_cost']:,}) ]",
+                curses.color_pair(bp) | curses.A_BOLD)
+
+    # ── Right: existing templates for this company ─────────────
+    rx = mid + 2
+    ry = 5
+    owned = templates_for_company(gs, company.id)
+    safe_addstr(win, ry, rx, f"{company.name}'s TEMPLATES ({len(owned)})",
+                curses.color_pair(PAIR_TITLE) | curses.A_BOLD)
+    ry += 1
+    hline(win, ry, rx, w - rx - 2, PAIR_BORDER); ry += 1
+
+    if not owned:
+        safe_addstr(win, ry, rx, "None yet — build one on the left.",
+                    curses.color_pair(PAIR_MUTED))
+    else:
+        for t in owned:
+            if ry >= h - 5:
+                break
+            safe_addstr(win, ry, rx, t.name, curses.color_pair(PAIR_ACCENT) | curses.A_BOLD)
+            ry += 1
+            safe_addstr(win, ry, rx + 2,
+                        f"Design+{t.design_bonus:.0f}  Tech+{t.tech_bonus:.0f}  "
+                        f"Time-{t.time_reduction:.0%}  Bugs-{t.bug_reduction:.0%}",
+                        curses.color_pair(PAIR_MUTED))
+            ry += 1
+
+    # In-progress template builds
+    building = [p for p in gs.projects if getattr(p, "is_template", False) and p.status == "In Dev"]
+    if building and ry < h - 6:
+        ry += 1
+        safe_addstr(win, ry, rx, "BUILDING…", curses.color_pair(PAIR_TITLE) | curses.A_BOLD)
+        ry += 1
+        for p in building:
+            if ry >= h - 5:
+                break
+            safe_addstr(win, ry, rx, f"{p.template_type}  {p.progress}%  "
+                        f"(manage in Projects → Enter)", curses.color_pair(PAIR_WARN))
+            ry += 1
+
+    if ui.tmpl_message:
+        mp = PAIR_ACCENT if "✓" in ui.tmpl_message else PAIR_DANGER
+        safe_addstr(win, h - 4, 2, ui.tmpl_message[:w - 4], curses.color_pair(mp) | curses.A_BOLD)
+    safe_addstr(win, h - 3, 2,
+                "↑↓: template type  |  C: cycle company  |  Enter: build  |  Esc: back",
+                curses.color_pair(PAIR_MUTED))
 

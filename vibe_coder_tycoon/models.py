@@ -14,6 +14,20 @@ class DevSession:
 
 
 @dataclass
+class Template:
+    """Phase 8 — a company-scoped internal asset that boosts future builds."""
+    name: str
+    template_type: str
+    version: int
+    company_id: int
+    design_bonus: float = 0.0      # starting Design score granted to a project
+    tech_bonus: float = 0.0        # starting Tech score granted to a project
+    time_reduction: float = 0.0    # 0–0.3 fraction off dev_total_days
+    bug_reduction: float = 0.0     # 0–0.5 fraction off bug generation
+    built_year: int = 2025
+
+
+@dataclass
 class Loan:
     lender: str
     principal: int
@@ -68,6 +82,10 @@ class Project:
     auto_update_countdown: int = 0
     discontinued: bool = False
     revenue_history: list = field(default_factory=list)
+    # Phase 8 — templates
+    template_id: int = -1           # index into gs.templates, -1 = none used
+    is_template: bool = False       # True while this project is a template build
+    template_type: str = ""         # which TEMPLATE_TYPES entry (when is_template)
 
 
 @dataclass
@@ -126,6 +144,12 @@ class Company:
     # Phase 4
     parent_company_id: int = -1
     history: list = field(default_factory=list)
+    # Phase 9 — infrastructure & compute
+    hosting_provider: str = "Free Tier"
+    gpu_inventory: list = field(default_factory=list)   # [{"name", "year_bought"}]
+    datacenter_tier: int = 0
+    compute_capacity: int = 0       # mirrors datacenter tier capacity
+    compute_for_sale: bool = False
 
 
 @dataclass
@@ -165,7 +189,9 @@ class GameState:
     research_progress: dict
     settings: dict
     demo_ended: bool = False
-    schema_version: int = 7
+    schema_version: int = 8
+    # Phase 8 — templates (company-scoped internal assets)
+    templates: list = field(default_factory=list)
     # Phase 7 — tech timeline / tools
     current_era: str = "The Discovery Era"
     subscription_tier: str = "Pro"

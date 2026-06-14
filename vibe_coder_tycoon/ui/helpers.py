@@ -63,6 +63,7 @@ def status_pair(status):
         "Sunset":       PAIR_BADGE_RED,
         "Archived":     PAIR_MUTED,
         "Sold":         PAIR_BADGE_AMBER,
+        "Template":     PAIR_BADGE_GREEN,
     }.get(status, PAIR_BADGE_BLUE)
 
 def fill_background(win, pair):

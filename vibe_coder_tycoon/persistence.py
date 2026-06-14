@@ -4,7 +4,7 @@ import hashlib
 from typing import Optional
 
 from .constants import SAVE_FILE, MONTH_NAMES, APP_CONFIG_DIR
-from .models import GameState, Founder, Company, Project, Employee, Loan, DevSession
+from .models import GameState, Founder, Company, Project, Employee, Loan, DevSession, Template
 
 
 # ─────────────────────── CONFIG DIR ───────────────────────────
@@ -110,6 +110,7 @@ def _gs_to_dict(gs: GameState, username: str) -> dict:
         "active_ide": gs.active_ide,
         "active_model": gs.active_model,
         "tokens_this_month": gs.tokens_this_month,
+        "templates": [t.__dict__ for t in gs.templates],
     }
 
 def save_game(gs: GameState, username: str) -> dict:
@@ -261,6 +262,21 @@ def _migrate(data: dict) -> dict:
         data.setdefault("active_model", "")
         data.setdefault("tokens_this_month", 0)
         data["schema_version"] = 7
+    if version < 8:
+        # Phase 8: templates list on the game + project template fields
+        data.setdefault("templates", [])
+        for p in data.get("projects", []):
+            p.setdefault("template_id", -1)
+            p.setdefault("is_template", False)
+            p.setdefault("template_type", "")
+        # Phase 9: company infrastructure fields
+        for c in data.get("companies", []):
+            c.setdefault("hosting_provider", "Free Tier")
+            c.setdefault("gpu_inventory", [])
+            c.setdefault("datacenter_tier", 0)
+            c.setdefault("compute_capacity", 0)
+            c.setdefault("compute_for_sale", False)
+        data["schema_version"] = 8
     return data
 
 
@@ -324,6 +340,11 @@ def _dict_to_gs(data: dict) -> GameState:
             months_negative=int(c.get("months_negative", 0)),
             parent_company_id=int(c.get("parent_company_id", -1)),
             history=list(c.get("history", [])),
+            hosting_provider=c.get("hosting_provider", "Free Tier"),
+            gpu_inventory=list(c.get("gpu_inventory", [])),
+            datacenter_tier=int(c.get("datacenter_tier", 0)),
+            compute_capacity=int(c.get("compute_capacity", 0)),
+            compute_for_sale=bool(c.get("compute_for_sale", False)),
         ))
 
     def _load_project(pd: dict) -> Project:
@@ -340,6 +361,8 @@ def _dict_to_gs(data: dict) -> GameState:
             "revenue_model", "obsolescence_months", "age_months", "active_users",
             "churn_rate", "version", "parent_product_id", "auto_update_interval",
             "auto_update_countdown", "discontinued", "revenue_history",
+            # Phase 8 fields
+            "template_id", "is_template", "template_type",
         }
         clean = {k: v for k, v in pd.items() if k in known}
         p = Project(**clean)
@@ -366,6 +389,19 @@ def _dict_to_gs(data: dict) -> GameState:
 
     projects  = [_load_project(dict(p)) for p in data.get("projects", [])]
     employees = [_load_employee(e) for e in data.get("employees", [])]
+
+    _tmpl_fields = {
+        "name", "template_type", "version", "company_id", "design_bonus",
+        "tech_bonus", "time_reduction", "bug_reduction", "built_year",
+    }
+    templates = []
+    for td in data.get("templates", []):
+        clean = {k: v for k, v in td.items() if k in _tmpl_fields}
+        try:
+            templates.append(Template(**clean))
+        except TypeError:
+            pass
+
     return GameState(
         founder=founder,
         year=data["year"],
@@ -385,6 +421,7 @@ def _dict_to_gs(data: dict) -> GameState:
         active_ide=data.get("active_ide", "CodeBox"),
         active_model=data.get("active_model", ""),
         tokens_this_month=int(data.get("tokens_this_month", 0)),
+        templates=templates,
     )
 
 
