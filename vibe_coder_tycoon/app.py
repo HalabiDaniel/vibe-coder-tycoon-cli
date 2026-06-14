@@ -1584,7 +1584,9 @@ def _now_str() -> str:
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
 def _submit_game_run(cloud: CloudService, user_id: str, gs: GameState):
+    from .constants import GAME_VERSION
     run_data = {
+        "game_version":      GAME_VERSION,
         "months_survived":   gs.months_elapsed,
         "companies_created": len(gs.companies),
         "projects_launched": len([p for p in gs.projects if p.status in ("Launched", "Growing")]),

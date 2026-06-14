@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import hashlib
 from typing import Optional
 
@@ -25,6 +26,31 @@ def _sync_queue_path() -> str:
 
 def compute_checksum(data: dict) -> str:
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+
+# ─────────────────────── RNG STATE ────────────────────────────
+#
+# The game routes most randomness through the module-level `random` instance.
+# To make a loaded run continue the *same* deterministic sequence, we snapshot
+# `random.getstate()` on save and restore it on load. JSON turns the state's
+# inner tuples into lists, so restoration re-tuples them before `setstate`.
+
+def _serialize_rng_state():
+    try:
+        return list(random.getstate())
+    except Exception:
+        return None
+
+def _restore_rng_state(state) -> bool:
+    """Restore the global RNG from a serialized state. Returns True on success."""
+    if not state:
+        return False
+    try:
+        version, internal, gauss_next = state
+        random.setstate((int(version), tuple(int(x) for x in internal), gauss_next))
+        return True
+    except Exception:
+        return False
 
 
 # ─────────────────────── SYNC QUEUE ───────────────────────────
@@ -97,6 +123,8 @@ def _gs_to_dict(gs: GameState, username: str) -> dict:
         "month": gs.month,
         "months_elapsed": gs.months_elapsed,
         "active_ai_sub_idx": gs.active_ai_sub_idx,
+        "demo_ended": gs.demo_ended,
+        "rng_state": _serialize_rng_state(),
         "founder": gs.founder.__dict__ if gs.founder else None,
         "companies": [_company_dict(c) for c in gs.companies],
         "projects": [_project_dict(p) for p in gs.projects],
@@ -340,6 +368,9 @@ def _migrate(data: dict) -> dict:
 def _dict_to_gs(data: dict) -> GameState:
     data = _migrate(data)
 
+    # Restore the run RNG so a loaded game continues the same sequence.
+    _restore_rng_state(data.get("rng_state"))
+
     fd = data.get("founder")
     if fd:
         founder = Founder(
@@ -510,14 +541,14 @@ def _dict_to_gs(data: dict) -> GameState:
         month=data["month"],
         months_elapsed=data.get("months_elapsed", 0),
         active_ai_sub_idx=data.get("active_ai_sub_idx", 0),
-        companies=companies,
-        projects=projects,
+        companies=companies,        projects=projects,
         employees=employees,
         news_feed=data.get("news_feed", []),
         events=data.get("events", []),
         research_progress=data.get("research_progress", {}),
         settings=data.get("settings", default_settings()),
         schema_version=data.get("schema_version", 2),
+        demo_ended=bool(data.get("demo_ended", False)),
         current_era=data.get("current_era", "The Discovery Era"),
         subscription_tier=data.get("subscription_tier", "Pro"),
         active_ide=data.get("active_ide", "CodeBox"),
