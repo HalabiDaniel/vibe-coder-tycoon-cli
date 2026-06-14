@@ -1007,3 +1007,179 @@ IPO_DUE_DILIGENCE_CHANCE   = 0.45     # chance the due-diligence event surfaces 
 
 # Net-worth / victory
 TRILLIONAIRE_THRESHOLD = 1_000_000_000_000
+
+
+# ─────────────────────── PHASE 13 — EVENTS / RIVALS ──────────
+#
+# Weighted random-event catalog (GDD §21). Each event has a category that
+# affects how Vibe / founder-sanity / reputation modulate its likelihood:
+#   positive  — good fortune; suppressed when Vibe runs hot / sanity is low
+#   negative  — setbacks; amplified by hot Vibe and low founder sanity
+#   meme       — internet chaos; mildly amplified by hot Vibe
+#   founder    — personal / wellbeing beats; gated on founder sanity
+#
+# "kind" is either "instant" (effects applied immediately) or "choice" (a card
+# is pushed to gs.pending_event_cards and the player picks an option). Effects
+# are a flat dict resolved by events.apply_effects:
+#   personal_cash, company_cash, reputation, vibe, sanity, tokens, hype
+#
+# Optional gates: min_year, requires ∈
+#   {"has_company","has_product","has_employees","is_public"}.
+# "cooldown" is the minimum months before the same event may fire again.
+
+EVENT_BASE_MONTHLY_CHANCE = 0.45      # baseline chance an event fires in a month
+EVENT_GLOBAL_COOLDOWN     = 1         # min months between any two fired events
+
+EVENT_CATALOG = [
+    # ── POSITIVE ──────────────────────────────────────────────
+    {
+        "id": "hn_front_page", "category": "positive", "icon": "🚀", "weight": 10,
+        "kind": "instant", "cooldown": 4, "requires": "has_product",
+        "headline": "Your launch hit the front page of Hacker Mews!",
+        "effects": {"hype": 25, "reputation": 4, "vibe": 8},
+    },
+    {
+        "id": "angel_cold_email", "category": "positive", "icon": "💌", "weight": 7,
+        "kind": "choice", "cooldown": 8, "requires": "has_company",
+        "headline": "A friendly angel slid into your DMs.",
+        "body": ("An angel investor loved your vibe and offers a small no-strings "
+                 "grant — or a coffee chat that could build a longer relationship."),
+        "choices": [
+            {"label": "Take the $8,000 grant", "effects": {"personal_cash": 8000},
+             "result": "Grant wired to your personal account. Easy money."},
+            {"label": "Build the relationship (+rep, +vibe)",
+             "effects": {"reputation": 6, "vibe": 10},
+             "result": "You skip the cash but earn a reputation boost and good vibes."},
+        ],
+    },
+    {
+        "id": "open_source_love", "category": "positive", "icon": "⭐", "weight": 8,
+        "kind": "instant", "cooldown": 6,
+        "headline": "An open-source side project of yours is trending on GitHive.",
+        "effects": {"reputation": 3, "vibe": 6},
+    },
+    {
+        "id": "token_credits", "category": "positive", "icon": "🎟️", "weight": 6,
+        "kind": "instant", "cooldown": 6, "requires": "has_company",
+        "headline": "Your AI provider comped you free token credits.",
+        "effects": {"company_cash": 1500, "vibe": 4},
+    },
+
+    # ── NEGATIVE ──────────────────────────────────────────────
+    {
+        "id": "data_breach", "category": "negative", "icon": "🔓", "weight": 9,
+        "kind": "choice", "cooldown": 10, "requires": "has_product",
+        "headline": "Security researcher reports a leak in your product.",
+        "body": ("A whitehat found exposed user data. You can pay for a proper "
+                 "remediation, or quietly patch it and hope nobody notices."),
+        "choices": [
+            {"label": "Pay for full remediation (-$4,000, +rep)",
+             "effects": {"company_cash": -4000, "reputation": 2},
+             "result": "Transparent fix. Users respect the honesty."},
+            {"label": "Quietly patch it (gamble)",
+             "effects": {"reputation": -8, "vibe": -6},
+             "result": "It leaked anyway. The internet is not pleased."},
+        ],
+    },
+    {
+        "id": "api_price_hike", "category": "negative", "icon": "💸", "weight": 8,
+        "kind": "instant", "cooldown": 8, "requires": "has_company",
+        "headline": "Your model provider jacked up API prices overnight.",
+        "effects": {"company_cash": -2000, "sanity": -4},
+    },
+    {
+        "id": "framework_deprecation", "category": "negative", "icon": "⚠️", "weight": 7,
+        "kind": "instant", "cooldown": 8,
+        "headline": "A framework you depend on was deprecated. Migration looms.",
+        "effects": {"sanity": -6, "vibe": -5},
+    },
+    {
+        "id": "viral_outage", "category": "negative", "icon": "🔥", "weight": 6,
+        "kind": "instant", "cooldown": 10, "requires": "has_product",
+        "headline": "Your app went down during peak traffic. Screenshots everywhere.",
+        "effects": {"reputation": -5, "hype": -15, "sanity": -5},
+    },
+
+    # ── MEME ──────────────────────────────────────────────────
+    {
+        "id": "vibe_coding_thread", "category": "meme", "icon": "🧵", "weight": 8,
+        "kind": "instant", "cooldown": 5,
+        "headline": "Your 'I vibe-coded a unicorn in a weekend' thread went viral.",
+        "effects": {"reputation": 2, "vibe": 12, "hype": 10},
+    },
+    {
+        "id": "ai_doom_discourse", "category": "meme", "icon": "🤖", "weight": 6,
+        "kind": "instant", "cooldown": 6,
+        "headline": "AI doom discourse is melting timelines again.",
+        "effects": {"vibe": -4, "sanity": -3},
+    },
+    {
+        "id": "founder_meme_account", "category": "meme", "icon": "😹", "weight": 5,
+        "kind": "choice", "cooldown": 9,
+        "headline": "A meme account is dunking on a screenshot of your code.",
+        "body": ("Your spaghetti code is the main character today. Lean into the "
+                 "joke, or log off and touch grass?"),
+        "choices": [
+            {"label": "Lean in, post the cursed code yourself",
+             "effects": {"reputation": -2, "vibe": 9, "hype": 8},
+             "result": "Self-aware shitposting wins the day. Vibes immaculate."},
+            {"label": "Log off and recover",
+             "effects": {"sanity": 8, "vibe": -2},
+             "result": "You close the laptop. Sanity restored."},
+        ],
+    },
+
+    # ── FOUNDER ───────────────────────────────────────────────
+    {
+        "id": "burnout_warning", "category": "founder", "icon": "🪫", "weight": 8,
+        "kind": "choice", "cooldown": 6,
+        "headline": "You haven't slept properly in weeks.",
+        "body": ("The grind is catching up. Take a real break to recover, or push "
+                 "through on caffeine and spite."),
+        "choices": [
+            {"label": "Take a proper break (+sanity, -vibe)",
+             "effects": {"sanity": 15, "vibe": -6},
+             "result": "You rest. Your brain thanks you."},
+            {"label": "Push through (gamble)",
+             "effects": {"sanity": -10, "vibe": 6},
+             "result": "You ship more, but you're running on fumes."},
+        ],
+    },
+    {
+        "id": "inspiration_strike", "category": "founder", "icon": "💡", "weight": 7,
+        "kind": "instant", "cooldown": 5,
+        "headline": "A shower thought just unlocked your next big idea.",
+        "effects": {"vibe": 10, "sanity": 4},
+    },
+    {
+        "id": "impostor_syndrome", "category": "founder", "icon": "🌀", "weight": 6,
+        "kind": "instant", "cooldown": 6,
+        "headline": "Impostor syndrome is hitting hard today.",
+        "effects": {"sanity": -7, "vibe": -3},
+    },
+    {
+        "id": "mentor_call", "category": "founder", "icon": "🧙", "weight": 5,
+        "kind": "instant", "cooldown": 8,
+        "headline": "An old mentor checked in and gave you perspective.",
+        "effects": {"sanity": 8, "reputation": 1},
+    },
+]
+
+# Background rival system (GDD §22). Rivals operate in the player's verticals and
+# create market saturation that gently suppresses sales — no micro-management.
+RIVAL_NAME_PREFIXES = [
+    "Hyper", "Quantum", "Neural", "Vibe", "Turbo", "Synth", "Prompt", "Apex",
+    "Nova", "Pixel", "Cloud", "Forge", "Stack", "Loop", "Flux",
+]
+RIVAL_NAME_SUFFIXES = [
+    "Labs", "AI", "Soft", "Works", "Systems", "Dynamics", "Forge", "Stack",
+    "ly", "io", "HQ", "Collective", "Studio",
+]
+RIVAL_TAGLINES = [
+    "the future of building", "AI-native everything", "shipping at the speed of thought",
+    "your unfair advantage", "code that codes itself", "the last tool you'll ever need",
+]
+
+# How strongly cumulative rival presence in a vertical suppresses player sales.
+RIVAL_SATURATION_FLOOR = 0.45         # sales never drop below 45% from rivals alone
+RIVAL_MAX_ACTIVE       = 6            # cap on simultaneous background rivals

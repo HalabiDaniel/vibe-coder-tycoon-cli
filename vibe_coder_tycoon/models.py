@@ -213,6 +213,19 @@ class FundingDeal:
 
 
 @dataclass
+class RivalCompany:
+    """Phase 13 — a lightweight background competitor (GDD §22)."""
+    name: str
+    focus: str                  # broad focus, e.g. "AI Tools"
+    vertical: str               # the project type (ptype) it competes in
+    product_name: str
+    market_presence: float      # 0–100, how much of the vertical it captures
+    founded_year: int
+    aggression: float = 0.5     # monthly presence growth factor
+    tagline: str = ""
+
+
+@dataclass
 class GameState:
     founder: Optional[Founder]
     year: int
@@ -227,7 +240,7 @@ class GameState:
     research_progress: dict
     settings: dict
     demo_ended: bool = False
-    schema_version: int = 11
+    schema_version: int = 12
     # Phase 8 — templates (company-scoped internal assets)
     templates: list = field(default_factory=list)
     # Phase 7 — tech timeline / tools
@@ -245,6 +258,10 @@ class GameState:
     loan_default_count: int = 0
     # Phase 12 — stock market snapshot (parody index + parody companies)
     market: dict = field(default_factory=dict)
+    # Phase 13 — events, rivals, procedural content
+    rivals: list = field(default_factory=list)            # list of RivalCompany
+    event_cooldowns: dict = field(default_factory=dict)   # event_id -> months_elapsed last fired
+    pending_event_cards: list = field(default_factory=list)  # choice-card dicts awaiting resolution
 
     def total_cash(self):
         return sum(c.cash for c in self.companies if c.active)

@@ -25,6 +25,7 @@ from .ui.screens.model_lab import draw_model_lab, ModelLabUIState
 from .ui.screens.funding import draw_funding, FundingUIState
 from .ui.screens.research import ResearchUIState, draw_research
 from .ui.screens.news import NewsUIState, draw_news
+from .ui.screens.events import draw_event_card
 from .ui.screens.help import draw_help
 from .ui.screens.demo_end import draw_demo_end
 from .ui.screens.account import AccountUIState, draw_account, ACCOUNT_BUTTON_COUNT, account_button_label
@@ -118,6 +119,7 @@ def main(stdscr):
     model_lab_ui  = ModelLabUIState()
     funding_ui    = FundingUIState()
     news_ui       = NewsUIState()
+    event_card_sel = 0   # Phase 13 — selection in the active event card overlay
     account_ui    = AccountUIState()
     save_slots_ui = SaveSlotsUIState()
 
@@ -253,6 +255,13 @@ def main(stdscr):
                 elif cloud_sync_status == "failed":
                     sync_indicator = " ✗ sync failed"
                 draw_statusbar(stdscr, status_msg + sync_indicator)
+
+                # Phase 13 — event choice card overlay (drawn on top of all tabs)
+                if gs.pending_event_cards:
+                    card = gs.pending_event_cards[0]
+                    event_card_sel = max(0, min(event_card_sel,
+                                                len(card.get("choices", [])) - 1))
+                    draw_event_card(stdscr, card, event_card_sel)
 
         stdscr.refresh()
 
@@ -745,6 +754,22 @@ def main(stdscr):
                         _submit_game_run(cloud, cloud_user_id, gs)
                     screen = "title"
                     gs = None
+                continue
+
+            # Phase 13 — an open event card blocks other input until resolved
+            if gs.pending_event_cards:
+                card = gs.pending_event_cards[0]
+                choices = card.get("choices", [])
+                if key == curses.KEY_UP:
+                    event_card_sel = max(0, event_card_sel - 1)
+                elif key == curses.KEY_DOWN:
+                    event_card_sel = min(len(choices) - 1, event_card_sel + 1)
+                elif key in (10, curses.KEY_ENTER):
+                    result = dispatch(gs, "resolve_event_choice",
+                                      card_id=card.get("card_id"),
+                                      choice_idx=event_card_sel)
+                    status_msg = result.message
+                    event_card_sel = 0
                 continue
 
             if key == ord('q') or key == ord('Q'):

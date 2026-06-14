@@ -96,25 +96,29 @@ def monthly_product_tick(gs: GameState, p: Project, date_str: str) -> list:
     # Obsolescence factor — silent per GDD
     obso = _obsolescence_factor(p)
 
+    # Phase 4: focus revenue bonus for the project's company
+    company = gs.company_by_id(p.company_id)
+    focus = get_focus_data(company.focus_area) if company else None
+    focus_rev_mult = focus["revenue_mult"] if focus else 1.0
+
+    # Phase 13: rival market saturation gently suppresses sales in this vertical.
+    from .rivals import saturation_factor  # lazy to avoid init-time cycle
+    sat = saturation_factor(gs, p.ptype)
+
     # User growth / churn (Phase 5: Community Wizards reduce effective churn)
     from .employees import get_post_launch_bonus  # lazy
     team = get_post_launch_bonus(gs, p.company_id)
     quality = p.quality_score
     growth_rate = 0.04 + quality / 2500.0           # 4 – 8% per month
     eff_churn = p.churn_rate * team["churn_mult"]
-    net_pct = (growth_rate - eff_churn) * obso
+    net_pct = (growth_rate * sat - eff_churn) * obso
     if p.active_users > 0:
         p.active_users = max(0, p.active_users + int(p.active_users * net_pct))
     p.users = p.active_users
 
-    # Phase 4: focus revenue bonus for the project's company
-    company = gs.company_by_id(p.company_id)
-    focus = get_focus_data(company.focus_area) if company else None
-    focus_rev_mult = focus["revenue_mult"] if focus else 1.0
-
-    # Revenue from current user base × obsolescence × focus bonus
+    # Revenue from current user base × obsolescence × focus bonus × saturation
     base_rev = _calc_revenue_from_users(p)
-    p.revenue = max(0, int(base_rev * obso * focus_rev_mult))
+    p.revenue = max(0, int(base_rev * obso * focus_rev_mult * sat))
     p.lifetime_revenue += p.revenue
 
     p.revenue_history.append(p.revenue)

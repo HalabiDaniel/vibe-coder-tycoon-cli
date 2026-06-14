@@ -23,6 +23,9 @@ from .systems import infra            # registers infrastructure actions (Phase 
 from .systems import player_models    # registers player model actions (Phase 10)
 from .systems import investors        # registers investor/loan actions (Phase 11)
 from .systems import stocks           # registers stock/IPO actions (Phase 12)
+from .systems import events           # registers event-card resolution (Phase 13)
+from .systems import rivals           # background rival system (Phase 13)
+from .systems import content          # procedural content engine (Phase 13)
 
 
 def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
@@ -67,6 +70,8 @@ def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
         gs.active_model = names[0]
     # Phase 12: seed the parody stock market snapshot.
     stocks.init_market(gs)
+    # Phase 13: seed a couple of background rivals.
+    rivals.seed_initial_rivals(gs)
     return gs
 
 
@@ -121,6 +126,9 @@ def advance_month(gs: GameState) -> str:
     # Phase 12: stock market price movement, MRR streaks, shareholder pressure
     events_this_month.extend(stocks.monthly_stocks_tick(gs))
 
+    # Phase 13: background rivals drift + may clone into the player's verticals
+    events_this_month.extend(rivals.monthly_rivals_tick(gs))
+
     # Phase 6: mental-health settlement (employee sanity, conditions, founder)
     events_this_month.extend(mental_health.monthly_tick(gs))
 
@@ -136,25 +144,18 @@ def advance_month(gs: GameState) -> str:
     # Reputation drift
     finance.adjust_reputation(gs, random.randint(-1, 3))
 
+    # Phase 13: weighted random event (after vibe/sanity/rep settled this month)
+    events_this_month.extend(events.monthly_event_tick(gs))
+
     # Employee mood drift
     for emp in gs.employees:
         emp.mood = max(0, min(100, emp.mood + random.randint(-4, 4)))
         emp.productivity = max(0, min(100, emp.productivity + random.randint(-3, 3)))
 
-    # Random news
-    random_news = [
-        {"icon": "📰", "headline": "AI token costs drop 15% — good time to prototype",
-         "category": "Market", "date": date_str, "effect": None},
-        {"icon": "⚠️",  "headline": "Market sentiment sours on consumer AI tools",
-         "category": "Market", "date": date_str, "effect": None},
-        {"icon": "🔥",  "headline": "IndieScroll trending: solo builders hit 10K MRR",
-         "category": "Community", "date": date_str, "effect": None},
-        {"icon": "💡",  "headline": "New open-source stack released — consider switching",
-         "category": "Tools", "date": date_str, "effect": None},
-        {"icon": "💸",  "headline": "Angel round closed: $500K into micro-SaaS",
-         "category": "Funding", "date": date_str, "effect": None},
-    ]
-    gs.news_feed.insert(0, random.choice(random_news))
+    # Random news — procedural content engine (Phase 13)
+    news_item = content.gen_news_item()
+    news_item["date"] = date_str
+    gs.news_feed.insert(0, news_item)
     gs.news_feed = gs.news_feed[:20]
 
     gs.events = events_this_month + gs.events

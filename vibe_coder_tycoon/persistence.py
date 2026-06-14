@@ -4,7 +4,7 @@ import hashlib
 from typing import Optional
 
 from .constants import SAVE_FILE, MONTH_NAMES, APP_CONFIG_DIR
-from .models import GameState, Founder, Company, Project, Employee, Loan, DevSession, Template, AIModel, FundingDeal
+from .models import GameState, Founder, Company, Project, Employee, Loan, DevSession, Template, AIModel, FundingDeal, RivalCompany
 
 
 # ─────────────────────── CONFIG DIR ───────────────────────────
@@ -117,6 +117,9 @@ def _gs_to_dict(gs: GameState, username: str) -> dict:
         "pending_offers": gs.pending_offers,
         "loan_default_count": gs.loan_default_count,
         "market": gs.market,
+        "rivals": [r.__dict__ for r in gs.rivals],
+        "event_cooldowns": gs.event_cooldowns,
+        "pending_event_cards": gs.pending_event_cards,
     }
 
 def save_game(gs: GameState, username: str) -> dict:
@@ -306,6 +309,12 @@ def _migrate(data: dict) -> dict:
             c.setdefault("share_price_history", [])
         data.setdefault("market", {})
         data["schema_version"] = 11
+    if version < 12:
+        # Phase 13: rivals, event cooldowns, pending event cards
+        data.setdefault("rivals", [])
+        data.setdefault("event_cooldowns", {})
+        data.setdefault("pending_event_cards", [])
+        data["schema_version"] = 12
     return data
 
 
@@ -464,6 +473,18 @@ def _dict_to_gs(data: dict) -> GameState:
         except TypeError:
             pass
 
+    _rival_fields = {
+        "name", "focus", "vertical", "product_name", "market_presence",
+        "founded_year", "aggression", "tagline",
+    }
+    rivals = []
+    for rd in data.get("rivals", []):
+        clean = {k: v for k, v in rd.items() if k in _rival_fields}
+        try:
+            rivals.append(RivalCompany(**clean))
+        except TypeError:
+            pass
+
     return GameState(
         founder=founder,
         year=data["year"],
@@ -490,6 +511,9 @@ def _dict_to_gs(data: dict) -> GameState:
         pending_offers=list(data.get("pending_offers", [])),
         loan_default_count=int(data.get("loan_default_count", 0)),
         market=dict(data.get("market", {})),
+        rivals=rivals,
+        event_cooldowns=dict(data.get("event_cooldowns", {})),
+        pending_event_cards=list(data.get("pending_event_cards", [])),
     )
 
 

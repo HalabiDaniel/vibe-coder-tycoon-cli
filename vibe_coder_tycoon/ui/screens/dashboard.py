@@ -43,6 +43,18 @@ def draw_dashboard(win, gs: GameState, selected_company_idx: int):
         profit = c.monthly_revenue - c.monthly_expenses
         pp = PAIR_ACCENT if profit >= 0 else PAIR_DANGER
 
+        # Phase 13 — rival market pressure across this company's live verticals
+        from ...engine.systems.rivals import saturation_factor
+        live_verts = {p.ptype for p in gs.projects
+                      if p.company_id == c.id and p.status in ("Launched", "Growing")
+                      and not p.discontinued}
+        if live_verts:
+            avg_sat = sum(saturation_factor(gs, v) for v in live_verts) / len(live_verts)
+            pressure_pct = int((1.0 - avg_sat) * 100)
+            pressure_val = "None" if pressure_pct <= 0 else f"-{pressure_pct}% sales"
+        else:
+            pressure_val = "—"
+
         rows = [
             ("Founded",       f"{MONTH_NAMES[c.founded_month-1]} {c.founded_year}"),
             ("Legal Style",   c.legal_style),
@@ -53,6 +65,7 @@ def draw_dashboard(win, gs: GameState, selected_company_idx: int):
             ("Debt",          f"${c.debt:,}" if c.debt else "None"),
             ("Valuation",     f"${c.valuation:,}"),
             ("Reputation",    f"{c.reputation}/100"),
+            ("Rival Pressure", pressure_val),
             ("Office",        ["", "Bedroom", "Co-Work", "Private Office", "HQ"][c.office_level]),
             ("Company Mood",  f"{c.mood}%"),
             ("Active Projects", str(len([p for p in gs.projects if p.company_id == c.id
