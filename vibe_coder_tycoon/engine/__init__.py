@@ -20,6 +20,8 @@ from .systems import mental_health   # registers mental-health actions (Phase 6)
 from .systems import models_ai       # registers model/IDE/subscription actions (Phase 7)
 from .systems import templates        # registers template actions (Phase 8)
 from .systems import infra            # registers infrastructure actions (Phase 9)
+from .systems import player_models    # registers player model actions (Phase 10)
+from .systems import investors        # registers investor/loan actions (Phase 11)
 
 
 def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
@@ -106,6 +108,12 @@ def advance_month(gs: GameState) -> str:
     # Phase 9: infrastructure settlement (hosting cost, outages, compute sales).
     # Runs after the product tick so it bills against this month's user base.
     events_this_month.extend(infra.monthly_infra_settlement(gs))
+
+    # Phase 10: player model training timers + licensing revenue
+    events_this_month.extend(player_models.monthly_player_models_tick(gs))
+
+    # Phase 11: investor deal checks + random new offers
+    events_this_month.extend(investors.monthly_investors_tick(gs))
 
     # Phase 6: mental-health settlement (employee sanity, conditions, founder)
     events_this_month.extend(mental_health.monthly_tick(gs))

@@ -21,6 +21,8 @@ from .ui.screens.projects import ProjectsUIState, draw_projects
 from .ui.screens.development import DevUIState, draw_development
 from .ui.screens.employees import EmployeesUIState, draw_employees, _assignable_projects
 from .ui.screens.market import draw_market, MarketUIState
+from .ui.screens.model_lab import draw_model_lab, ModelLabUIState
+from .ui.screens.funding import draw_funding, FundingUIState
 from .ui.screens.research import ResearchUIState, draw_research
 from .ui.screens.news import NewsUIState, draw_news
 from .ui.screens.help import draw_help
@@ -113,6 +115,8 @@ def main(stdscr):
     employees_ui  = EmployeesUIState()
     research_ui   = ResearchUIState()
     market_ui     = MarketUIState()
+    model_lab_ui  = ModelLabUIState()
+    funding_ui    = FundingUIState()
     news_ui       = NewsUIState()
     account_ui    = AccountUIState()
     save_slots_ui = SaveSlotsUIState()
@@ -205,7 +209,13 @@ def main(stdscr):
                 elif tab == "Founder":
                     draw_founder(stdscr, gs)
                 elif tab == "Companies":
-                    draw_companies(stdscr, gs, companies_ui)
+                    if companies_ui.view == "funding":
+                        sel_cid = (gs.companies[companies_ui.selected].id
+                                   if gs.companies and 0 <= companies_ui.selected < len(gs.companies)
+                                   else 0)
+                        draw_funding(stdscr, gs, funding_ui, sel_cid)
+                    else:
+                        draw_companies(stdscr, gs, companies_ui)
                 elif tab == "Projects":
                     if projects_ui.view == "dev":
                         draw_development(stdscr, gs, projects_ui.dev_project_idx, dev_ui)
@@ -214,7 +224,10 @@ def main(stdscr):
                 elif tab == "Employees":
                     draw_employees(stdscr, gs, employees_ui)
                 elif tab == "Market":
-                    draw_market(stdscr, gs, market_ui)
+                    if market_ui.view == "model_lab":
+                        draw_model_lab(stdscr, gs, model_lab_ui)
+                    else:
+                        draw_market(stdscr, gs, market_ui)
                 elif tab == "Research":
                     draw_research(stdscr, gs, research_ui)
                 elif tab == "News":
@@ -850,6 +863,10 @@ def main(stdscr):
                                 companies_ui.view = "holding"
                             else:
                                 companies_ui.message = "✗ Only Holding Company focus has a holding view."
+                        elif key in (ord('f'), ord('F')):
+                            companies_ui.view = "funding"
+                            funding_ui.view = "list"
+                            funding_ui.message = ""
 
                 elif companies_ui.view == "holding":
                     if key == 27:
@@ -910,6 +927,87 @@ def main(stdscr):
                             result = dispatch(gs, "toggle_compute_sale", company_id=sel_c.id)
                             companies_ui.message = ("✓ " if result.ok else "✗ ") + result.message
                             status_msg = result.message
+
+                elif companies_ui.view == "funding":
+                    sel_cid = (gs.companies[companies_ui.selected].id
+                               if gs.companies and 0 <= companies_ui.selected < len(gs.companies)
+                               else 0)
+                    if funding_ui.view == "apply_loan":
+                        if key == 27:
+                            funding_ui.view = "list"
+                            funding_ui.message = ""
+                        elif key == curses.KEY_UP:
+                            eligible = __import__(
+                                "vibe_coder_tycoon.engine.systems.investors",
+                                fromlist=["get_eligible_lenders"]
+                            ).get_eligible_lenders(gs, sel_cid)
+                            funding_ui.lender_sel = max(0, funding_ui.lender_sel - 1)
+                        elif key == curses.KEY_DOWN:
+                            from .engine.systems.investors import get_eligible_lenders
+                            eligible = get_eligible_lenders(gs, sel_cid)
+                            funding_ui.lender_sel = min(max(0, len(eligible) - 1),
+                                                        funding_ui.lender_sel + 1)
+                        elif key in (curses.KEY_BACKSPACE, 127, 8):
+                            funding_ui.loan_amount = funding_ui.loan_amount[:-1]
+                        elif 48 <= key <= 57:
+                            if len(funding_ui.loan_amount) < 10:
+                                funding_ui.loan_amount += chr(key)
+                        elif key in (10, curses.KEY_ENTER):
+                            from .engine.systems.investors import get_eligible_lenders
+                            eligible = get_eligible_lenders(gs, sel_cid)
+                            if eligible:
+                                lender = eligible[funding_ui.lender_sel]
+                                try:
+                                    amount = int(funding_ui.loan_amount or "0")
+                                except ValueError:
+                                    amount = 0
+                                result = dispatch(gs, "apply_for_loan",
+                                                  company_id=sel_cid,
+                                                  lender_name=lender["name"],
+                                                  amount=amount)
+                                funding_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                                status_msg = result.message
+                                if result.ok:
+                                    funding_ui.view = "list"
+                                    funding_ui.loan_amount = ""
+                    else:
+                        if key == 27:
+                            companies_ui.view = "list"
+                            funding_ui.message = ""
+                        elif key == curses.KEY_UP:
+                            funding_ui.offer_sel = max(0, funding_ui.offer_sel - 1)
+                        elif key == curses.KEY_DOWN:
+                            funding_ui.offer_sel = min(max(0, len(gs.pending_offers) - 1),
+                                                       funding_ui.offer_sel + 1)
+                        elif key in (ord('a'), ord('A')):
+                            if gs.pending_offers and 0 <= funding_ui.offer_sel < len(gs.pending_offers):
+                                offer = gs.pending_offers[funding_ui.offer_sel]
+                                result = dispatch(gs, "accept_investor_offer",
+                                                  offer_id=offer["offer_id"],
+                                                  company_id=sel_cid)
+                                funding_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                                status_msg = result.message
+                                funding_ui.offer_sel = 0
+                        elif key in (ord('x'), ord('X')):
+                            if gs.pending_offers and 0 <= funding_ui.offer_sel < len(gs.pending_offers):
+                                offer = gs.pending_offers[funding_ui.offer_sel]
+                                result = dispatch(gs, "reject_investor_offer",
+                                                  offer_id=offer["offer_id"])
+                                funding_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                                status_msg = result.message
+                                funding_ui.offer_sel = 0
+                        elif key in (ord('n'), ord('N')):
+                            if gs.pending_offers and 0 <= funding_ui.offer_sel < len(gs.pending_offers):
+                                offer = gs.pending_offers[funding_ui.offer_sel]
+                                result = dispatch(gs, "negotiate_offer",
+                                                  offer_id=offer["offer_id"])
+                                funding_ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                                status_msg = result.message
+                        elif key in (ord('l'), ord('L')):
+                            funding_ui.view = "apply_loan"
+                            funding_ui.loan_amount = ""
+                            funding_ui.lender_sel = 0
+                            funding_ui.message = ""
 
                 elif companies_ui.view == "new":
                     if key == 27:
@@ -1258,28 +1356,39 @@ def main(stdscr):
                     available_models, available_ides,
                 )
                 from .constants import SUBSCRIPTION_TIERS
-                models = available_models(gs)
-                if key == curses.KEY_UP:
-                    market_ui.model_sel = max(0, market_ui.model_sel - 1)
-                elif key == curses.KEY_DOWN:
-                    market_ui.model_sel = min(max(0, len(models) - 1),
-                                              market_ui.model_sel + 1)
-                elif key in (10, curses.KEY_ENTER):
-                    if models and 0 <= market_ui.model_sel < len(models):
-                        name = models[market_ui.model_sel]["name"]
-                        result = dispatch(gs, "set_active_model", model_name=name)
-                        status_msg = result.message
-                elif key in (ord('s'), ord('S')):
-                    tiers = [t["name"] for t in SUBSCRIPTION_TIERS]
-                    cur = tiers.index(gs.subscription_tier) if gs.subscription_tier in tiers else 0
-                    nxt = tiers[(cur + 1) % len(tiers)]
-                    status_msg = dispatch(gs, "set_subscription_tier", tier=nxt).message
-                elif key in (ord('i'), ord('I')):
-                    ides = [i["name"] for i in available_ides(gs)]
-                    if ides:
-                        cur = ides.index(gs.active_ide) if gs.active_ide in ides else 0
-                        nxt = ides[(cur + 1) % len(ides)]
-                        status_msg = dispatch(gs, "set_active_ide", ide_name=nxt).message
+
+                if market_ui.view == "model_lab":
+                    _handle_model_lab_keys(key, model_lab_ui, gs, status_msg)
+                    status_msg = model_lab_ui.message or status_msg
+                    if key == 27:
+                        market_ui.view = "market"
+                        model_lab_ui.message = ""
+                else:
+                    models = available_models(gs)
+                    if key == curses.KEY_UP:
+                        market_ui.model_sel = max(0, market_ui.model_sel - 1)
+                    elif key == curses.KEY_DOWN:
+                        market_ui.model_sel = min(max(0, len(models) - 1),
+                                                  market_ui.model_sel + 1)
+                    elif key in (10, curses.KEY_ENTER):
+                        if models and 0 <= market_ui.model_sel < len(models):
+                            name = models[market_ui.model_sel]["name"]
+                            result = dispatch(gs, "set_active_model", model_name=name)
+                            status_msg = result.message
+                    elif key in (ord('s'), ord('S')):
+                        tiers = [t["name"] for t in SUBSCRIPTION_TIERS]
+                        cur = tiers.index(gs.subscription_tier) if gs.subscription_tier in tiers else 0
+                        nxt = tiers[(cur + 1) % len(tiers)]
+                        status_msg = dispatch(gs, "set_subscription_tier", tier=nxt).message
+                    elif key in (ord('i'), ord('I')):
+                        ides = [i["name"] for i in available_ides(gs)]
+                        if ides:
+                            cur = ides.index(gs.active_ide) if gs.active_ide in ides else 0
+                            nxt = ides[(cur + 1) % len(ides)]
+                            status_msg = dispatch(gs, "set_active_ide", ide_name=nxt).message
+                    elif key in (ord('l'), ord('L')):
+                        market_ui.view = "model_lab"
+                        model_lab_ui.message = ""
 
             elif tab == "Research":
                 if key == curses.KEY_UP:
@@ -1436,6 +1545,82 @@ def _handle_new_company_keys(key, ui: CompaniesUIState, gs: GameState):
                               f"{MONTH_NAMES[gs.month-1]} {gs.year}"))
         ui.message = f"'{name}' created successfully!"
         ui.view = "list"
+
+def _handle_model_lab_keys(key, ui, gs: GameState, status_msg: str):
+    from .ui.screens.model_lab import ModelLabUIState
+    from .constants import AI_MODEL_AXES, AXIS_POINT_BUDGET
+
+    if ui.view == "train":
+        if ui.name_input:
+            if key == 27 or key in (10, curses.KEY_ENTER):
+                ui.name_input = False
+            elif key in (curses.KEY_BACKSPACE, 127, 8):
+                ui.model_name = ui.model_name[:-1]
+            elif 32 <= key < 127 and len(ui.model_name) < 30:
+                ui.model_name += chr(key)
+        else:
+            if key == 27:
+                ui.view = "list"
+                ui.message = ""
+            elif key == curses.KEY_UP:
+                ui.axis_sel = max(0, ui.axis_sel - 1)
+            elif key == curses.KEY_DOWN:
+                ui.axis_sel = min(len(AI_MODEL_AXES) - 1, ui.axis_sel + 1)
+            elif key == curses.KEY_LEFT:
+                if ui.axis_points[ui.axis_sel] > 0:
+                    ui.axis_points[ui.axis_sel] -= 1
+            elif key == curses.KEY_RIGHT:
+                total = sum(ui.axis_points)
+                if total < AXIS_POINT_BUDGET:
+                    ui.axis_points[ui.axis_sel] += 1
+            elif key in (ord('n'), ord('N')):
+                ui.name_input = True
+            elif key in (10, curses.KEY_ENTER):
+                total = sum(ui.axis_points)
+                if total <= 0:
+                    ui.message = "✗ Invest at least 1 point before training."
+                elif not ui.model_name.strip():
+                    ui.message = "✗ Enter a model name (press N)."
+                else:
+                    axes_dict = {AI_MODEL_AXES[i]["name"]: ui.axis_points[i]
+                                 for i in range(len(AI_MODEL_AXES))}
+                    invest_dict = {k: v for k, v in axes_dict.items() if v > 0}
+                    if gs.active_companies():
+                        cid = gs.active_companies()[0].id
+                        result = dispatch(gs, "start_model_training",
+                                          company_id=cid,
+                                          name=ui.model_name.strip(),
+                                          axes=axes_dict,
+                                          invest_points=invest_dict)
+                        ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                        if result.ok:
+                            ui.view = "list"
+                            ui.axis_points = [0] * 6
+                            ui.model_name = ""
+                    else:
+                        ui.message = "✗ No active company."
+    else:
+        if key == curses.KEY_UP:
+            ui.selected = max(0, ui.selected - 1)
+        elif key == curses.KEY_DOWN:
+            ui.selected = min(max(0, len(gs.player_models) - 1), ui.selected + 1)
+        elif key in (ord('l'), ord('L')):
+            if gs.player_models and 0 <= ui.selected < len(gs.player_models):
+                m = gs.player_models[ui.selected]
+                result = dispatch(gs, "toggle_model_licensing", model_id=m.model_id)
+                ui.message = ("✓ " if result.ok else "✗ ") + result.message
+        elif key in (ord('t'), ord('T')):
+            ui.view = "train"
+            ui.axis_points = [0] * 6
+            ui.model_name = ""
+            ui.message = ""
+        elif key in (ord('r'), ord('R')):
+            if gs.player_models and 0 <= ui.selected < len(gs.player_models):
+                m = gs.player_models[ui.selected]
+                result = dispatch(gs, "retire_player_model", model_id=m.model_id)
+                ui.message = ("✓ " if result.ok else "✗ ") + result.message
+                ui.selected = max(0, ui.selected - 1)
+
 
 def _handle_new_project_keys(key, ui: ProjectsUIState, gs: GameState, status_msg: str):
     if ui.new_step == 0:

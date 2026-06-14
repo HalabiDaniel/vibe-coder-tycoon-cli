@@ -97,7 +97,7 @@ def draw_companies(win, gs: GameState, ui: CompaniesUIState):
         _draw_company_detail(win, gs, ui, c, y, h, w)
 
     safe_addstr(win, h - 4, 2,
-                "↑↓:sel  D:deposit  W:withdraw  T:auto-dep  C:cover  O:office  L:legal  I:infra  H:holding",
+                "↑↓:sel  D:deposit  W:withdraw  T:auto-dep  C:cover  O:office  L:legal  I:infra  H:holding  F:funding",
                 curses.color_pair(PAIR_MUTED))
     if ui.message:
         mp = PAIR_ACCENT if "✓" in ui.message else PAIR_DANGER

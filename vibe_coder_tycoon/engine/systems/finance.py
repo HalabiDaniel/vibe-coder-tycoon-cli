@@ -53,6 +53,23 @@ def monthly_settlement(gs: GameState) -> list:
                     ("⚠️", f"{c.name} cash negative! ({c.months_negative} mo)", "bad", date_str)
                 )
 
+        # Phase 11: loan defaults after 6 months negative cash flow
+        if c.months_negative >= 6:
+            for loan in list(c.loans):
+                bal = loan.balance if isinstance(loan, Loan) else loan.get("balance", 0)
+                if bal > 0:
+                    if isinstance(loan, Loan):
+                        loan.balance = 0
+                    else:
+                        loan["balance"] = 0
+                    gs.loan_default_count = getattr(gs, "loan_default_count", 0) + 1
+                    adjust_reputation(gs, -8)
+                    events.append((
+                        "💀",
+                        f"LOAN DEFAULT on {c.name}! -8 rep, loan wiped.",
+                        "bad", date_str,
+                    ))
+
         c.valuation = max(0, c.cash + c.monthly_revenue * 12)
 
     # Vibe passive decay (0.5 per month, floored at 0)

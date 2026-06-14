@@ -175,6 +175,36 @@ class Founder:
 
 
 @dataclass
+class AIModel:
+    name: str
+    axes: dict                   # {"Coding": 8, "Reasoning": 5, ...}
+    version: int
+    company_id: int
+    capability_rating: float     # weighted sum of axes / 10.0 (0–10 scale)
+    model_id: int                # unique int, assigned at creation
+    licensed: bool = False
+    training_status: str = "ready"       # "training" | "ready"
+    training_days_remaining: int = 0
+    trained_year: int = 2025
+
+
+@dataclass
+class FundingDeal:
+    deal_id: int
+    round_type: str           # e.g. "Angel Round"
+    amount: int
+    equity_pct: float         # fraction 0–1 (e.g. 0.10 = 10%)
+    requirement_desc: str     # human readable
+    requirement_metric: str   # "mrr" | "users" | "revenue"
+    requirement_target: int   # numeric target to hit
+    deadline_month: int       # gs.months_elapsed value at deadline
+    company_id: int
+    investor_name: str
+    status: str = "active"    # "active" | "met" | "failed"
+    month_accepted: int = 0
+
+
+@dataclass
 class GameState:
     founder: Optional[Founder]
     year: int
@@ -189,7 +219,7 @@ class GameState:
     research_progress: dict
     settings: dict
     demo_ended: bool = False
-    schema_version: int = 8
+    schema_version: int = 10
     # Phase 8 — templates (company-scoped internal assets)
     templates: list = field(default_factory=list)
     # Phase 7 — tech timeline / tools
@@ -198,6 +228,13 @@ class GameState:
     active_ide: str = "CodeBox"
     active_model: str = ""          # selected default AI model (parody name)
     tokens_this_month: int = 0      # token consumption since last settlement
+    # Phase 10 — player-built AI models
+    player_models: list = field(default_factory=list)   # list of AIModel
+    _next_model_id: int = 0
+    # Phase 11 — loans, investors, funding
+    funding_deals: list = field(default_factory=list)     # list of FundingDeal
+    pending_offers: list = field(default_factory=list)    # list of dicts (not yet accepted)
+    loan_default_count: int = 0
 
     def total_cash(self):
         return sum(c.cash for c in self.companies if c.active)

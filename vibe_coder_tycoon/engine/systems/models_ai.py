@@ -27,12 +27,14 @@ def get_model(name: str) -> dict | None:
 
 def available_models(gs: GameState) -> list:
     """All catalog models released on/before the current in-game year, plus any
-    post-2042 auto-versioned frontier models. Sorted newest-and-best first."""
+    post-2042 auto-versioned frontier models. Player models come first."""
+    from .player_models import player_models_as_catalog
+    player = player_models_as_catalog(gs)
     year = gs.year
     out = [m for m in AI_MODELS if m["year"] <= year]
     out.extend(_future_models(gs))
     out.sort(key=lambda m: (-m["year"], -m["score"], m["name"]))
-    return out
+    return player + out
 
 
 def available_model_names(gs: GameState) -> list:

@@ -244,7 +244,7 @@ OFFICE_LEVELS = [
         "level": 6, "name": "Mid-Size HQ",
         "max_employees": 20,
         "upgrade_cost": 300000,
-        "unlocked_roles": ["Operations Goblin"],
+        "unlocked_roles": ["Operations Goblin", "AI Researcher", "Model Trainer"],
     },
     {
         "level": 7, "name": "Campus",
@@ -270,7 +270,7 @@ RISK_APPETITES = ["Cautious", "Balanced", "Aggressive", "Reckless"]
 EMPLOYEE_ROLES = [
     "Vibe Coder", "Prompt Engineer", "Frontend Dev", "Backend Dev",
     "Pixel Artist", "Growth Goblin", "Bug Hunter", "Community Wizard",
-    "Finance Gremlin", "Operations Goblin",
+    "Finance Gremlin", "Operations Goblin", "AI Researcher", "Model Trainer",
 ]
 
 EMPLOYEE_TRAITS = [
@@ -599,6 +599,20 @@ ROLE_CATALOG = {
         "min_reputation": 60,
         "blurb": "Makes the chaos run on time. The glue of the company.",
     },
+    "AI Researcher": {
+        "primary": ["research", "prompting"],
+        "salary": (3500, 6000),
+        "office_level": 6,
+        "min_reputation": 60,
+        "blurb": "Trains models and runs experiments nobody else understands.",
+    },
+    "Model Trainer": {
+        "primary": ["coding", "research"],
+        "salary": (4000, 7000),
+        "office_level": 6,
+        "min_reputation": 60,
+        "blurb": "Wrangles datasets and GPU clusters. Knows what OOM means.",
+    },
 }
 
 # Candidate name banks (procedural generation)
@@ -867,4 +881,93 @@ DATACENTER_TIERS = [
 
 # Passive revenue per sold compute unit per month (before demand/quality mods).
 COMPUTE_UNIT_PRICE = 9.0
+
+
+# ─────────────────────── PHASE 10 — PLAYER AI MODELS ──────────
+
+AI_MODEL_AXES = [
+    {"name": "Coding",      "weight": 0.30, "desc": "Code generation quality"},
+    {"name": "Reasoning",   "weight": 0.25, "desc": "Multi-step problem solving"},
+    {"name": "Creativity",  "weight": 0.15, "desc": "Novel solution generation"},
+    {"name": "Speed",       "weight": 0.15, "desc": "Response latency"},
+    {"name": "Context",     "weight": 0.10, "desc": "Long-context handling"},
+    {"name": "Multimodal",  "weight": 0.05, "desc": "Image/document processing"},
+]
+AXIS_POINT_BUDGET = 30   # total slider points to distribute across axes
+
+PLAYER_MODEL_UNLOCK = {
+    "min_office_level": 6,
+    "min_year": 2028,
+    "min_datacenter_tier": 2,
+    "min_researchers": 2,
+    "min_trainers": 1,
+    "min_cash": 50_000,
+}
+
+AI_MODEL_TRAINING_COST_PER_POINT = 5_000   # $ per axis point
+AI_MODEL_TRAINING_DAYS_PER_POINT = 6       # training days per axis point
+AI_MODEL_TOKEN_COST_PER_POINT    = 8_000   # tokens consumed per axis point
+
+AI_MODEL_LICENSE_BASE_REVENUE = 500   # $ per capability point per month
+
+
+# ─────────────────────── PHASE 11 — FUNDING ROUNDS ────────────
+
+FUNDING_ROUNDS = [
+    {
+        "name": "Friends & Family",
+        "min_year": 2025,
+        "amount_range": (5_000, 25_000),
+        "equity_range": (0.02, 0.08),
+        "req_months": 6,
+        "req_metric": "mrr",
+        "req_multiplier": 0.5,
+        "min_reputation": 0,
+        "min_mrr": 0,
+        "desc": "Your network. Low bar, high awkwardness at family dinner.",
+    },
+    {
+        "name": "Angel Round",
+        "min_year": 2025,
+        "amount_range": (25_000, 150_000),
+        "equity_range": (0.05, 0.15),
+        "req_months": 9,
+        "req_metric": "mrr",
+        "req_multiplier": 0.3,
+        "min_reputation": 30,
+        "min_mrr": 500,
+        "desc": "Individual investor. Writes a check, gives advice you didn't ask for.",
+    },
+    {
+        "name": "Seed Round",
+        "min_year": 2026,
+        "amount_range": (200_000, 1_000_000),
+        "equity_range": (0.10, 0.20),
+        "req_months": 12,
+        "req_metric": "mrr",
+        "req_multiplier": 0.25,
+        "min_reputation": 50,
+        "min_mrr": 5_000,
+        "desc": "Early-stage VC. Needs a compelling growth story.",
+    },
+    {
+        "name": "Series A",
+        "min_year": 2027,
+        "amount_range": (2_000_000, 10_000_000),
+        "equity_range": (0.15, 0.25),
+        "req_months": 18,
+        "req_metric": "revenue",
+        "req_multiplier": 0.20,
+        "min_reputation": 65,
+        "min_mrr": 50_000,
+        "desc": "Growth-stage. Requires serious metrics and a credible team.",
+    },
+]
+
+INVESTOR_NAMES = [
+    "Beacon Ventures", "YCombinator Parody", "VibeFund Capital",
+    "Andreessen Morality", "Sequoia Clone", "Tiger Global Lite",
+    "SoftBank of Vibes", "a16crypto", "Founders Fund Parody",
+    "Accel Parody", "Benchmark Clone", "Index Ventures Parody",
+]
 

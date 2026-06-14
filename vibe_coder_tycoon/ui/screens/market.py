@@ -16,6 +16,7 @@ from ...engine.systems.models_ai import (
 class MarketUIState:
     model_sel: int = 0      # selection index into the available-models list
     model_scroll: int = 0
+    view: str = "market"    # "market" | "model_lab"
 
 
 def draw_market(win, gs: GameState, ui: "MarketUIState"):
@@ -127,5 +128,5 @@ def draw_market(win, gs: GameState, ui: "MarketUIState"):
             break
 
     safe_addstr(win, h - 3, 2,
-                "Up/Down: browse models  |  Enter: set default model  |  S: subscription  |  I: IDE",
+                "Up/Down: browse models  |  Enter: set default model  |  S: subscription  |  I: IDE  |  L: Model Lab",
                 curses.color_pair(PAIR_MUTED))

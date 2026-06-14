@@ -4,7 +4,7 @@ import hashlib
 from typing import Optional
 
 from .constants import SAVE_FILE, MONTH_NAMES, APP_CONFIG_DIR
-from .models import GameState, Founder, Company, Project, Employee, Loan, DevSession, Template
+from .models import GameState, Founder, Company, Project, Employee, Loan, DevSession, Template, AIModel, FundingDeal
 
 
 # ─────────────────────── CONFIG DIR ───────────────────────────
@@ -111,6 +111,11 @@ def _gs_to_dict(gs: GameState, username: str) -> dict:
         "active_model": gs.active_model,
         "tokens_this_month": gs.tokens_this_month,
         "templates": [t.__dict__ for t in gs.templates],
+        "player_models": [m.__dict__ for m in gs.player_models],
+        "_next_model_id": gs._next_model_id,
+        "funding_deals": [d.__dict__ for d in gs.funding_deals],
+        "pending_offers": gs.pending_offers,
+        "loan_default_count": gs.loan_default_count,
     }
 
 def save_game(gs: GameState, username: str) -> dict:
@@ -277,6 +282,17 @@ def _migrate(data: dict) -> dict:
             c.setdefault("compute_capacity", 0)
             c.setdefault("compute_for_sale", False)
         data["schema_version"] = 8
+    if version < 9:
+        # Phase 10: player-built AI models
+        data.setdefault("player_models", [])
+        data.setdefault("_next_model_id", 0)
+        data["schema_version"] = 9
+    if version < 10:
+        # Phase 11: funding deals, investor offers, loan default count
+        data.setdefault("funding_deals", [])
+        data.setdefault("pending_offers", [])
+        data.setdefault("loan_default_count", 0)
+        data["schema_version"] = 10
     return data
 
 
@@ -402,6 +418,32 @@ def _dict_to_gs(data: dict) -> GameState:
         except TypeError:
             pass
 
+    _aimodel_fields = {
+        "name", "axes", "version", "company_id", "capability_rating",
+        "model_id", "licensed", "training_status", "training_days_remaining",
+        "trained_year",
+    }
+    player_models = []
+    for md in data.get("player_models", []):
+        clean = {k: v for k, v in md.items() if k in _aimodel_fields}
+        try:
+            player_models.append(AIModel(**clean))
+        except TypeError:
+            pass
+
+    _deal_fields = {
+        "deal_id", "round_type", "amount", "equity_pct", "requirement_desc",
+        "requirement_metric", "requirement_target", "deadline_month",
+        "company_id", "investor_name", "status", "month_accepted",
+    }
+    funding_deals = []
+    for dd in data.get("funding_deals", []):
+        clean = {k: v for k, v in dd.items() if k in _deal_fields}
+        try:
+            funding_deals.append(FundingDeal(**clean))
+        except TypeError:
+            pass
+
     return GameState(
         founder=founder,
         year=data["year"],
@@ -422,6 +464,11 @@ def _dict_to_gs(data: dict) -> GameState:
         active_model=data.get("active_model", ""),
         tokens_this_month=int(data.get("tokens_this_month", 0)),
         templates=templates,
+        player_models=player_models,
+        _next_model_id=int(data.get("_next_model_id", 0)),
+        funding_deals=funding_deals,
+        pending_offers=list(data.get("pending_offers", [])),
+        loan_default_count=int(data.get("loan_default_count", 0)),
     )
 
 
