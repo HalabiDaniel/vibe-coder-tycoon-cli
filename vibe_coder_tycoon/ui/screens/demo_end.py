@@ -8,6 +8,118 @@ from ..colors import *
 from ..helpers import *
 from ...constants import *
 from ...models import GameState, Founder, Company, Project, Employee
+from ...engine.systems.stocks import net_worth
+
+
+# ─────────────────────── SHARED RUN STATS ─────────────────────
+
+def _run_stats(gs: GameState):
+    """Aggregate end-of-run statistics shared by every end screen."""
+    total_rev   = sum(p.lifetime_revenue for p in gs.projects)
+    total_users = sum(p.active_users or p.users for p in gs.projects)
+    launched    = len([p for p in gs.projects if p.status != "In Dev"])
+    companies   = len(gs.companies)
+    graveyard   = len(getattr(gs, "graveyard", []))
+    models      = len(gs.player_models)
+    peak_nw     = max(getattr(gs, "peak_net_worth", 0.0), net_worth(gs))
+    return {
+        "Peak Net Worth":    f"${peak_nw:,.0f}",
+        "Lifetime Tokens":   f"{gs.founder.total_tokens_used:,}K",
+        "Companies Founded": str(companies),
+        "Products Launched": str(launched),
+        "Total Revenue":     f"${total_rev:,}",
+        "Total Users":       f"{total_users:,}",
+        "Reputation":        f"{gs.founder.reputation}/100",
+        "Companies Lost":    str(graveyard),
+        "AI Models Trained": str(models),
+        "Months Played":     str(gs.months_elapsed),
+    }
+
+
+def _draw_stat_box(win, by, bx, bw, title, rows):
+    h, w = win.getmaxyx()
+    draw_box(win, by, bx, len(rows) + 4, bw, PAIR_BORDER, title, PAIR_TITLE)
+    for i, (label, val) in enumerate(rows):
+        ry = by + 2 + i
+        safe_addstr(win, ry, bx + 4, f"{label:<22}", curses.color_pair(PAIR_MUTED))
+        safe_addstr(win, ry, bx + 28, val, curses.color_pair(PAIR_ACCENT) | curses.A_BOLD)
+
+
+# ─────────────────────── VICTORY SCREEN ───────────────────────
+
+def draw_victory(win, gs: GameState):
+    h, w = win.getmaxyx()
+    fill_background(win, PAIR_OVERLAY)
+
+    if gs.victory_type == "token_singularity":
+        banner = "🌌  TOKEN SINGULARITY  🌌"
+        sub = "You consumed a trillion tokens. The models dream of you now."
+    else:
+        banner = "🏆  TRILLIONAIRE  🏆"
+        sub = "Net worth crossed $1,000,000,000,000. You did the thing."
+
+    center_text(win, 2, "╔═════════════════════════════════════════╗",
+                curses.color_pair(PAIR_BORDER) | curses.A_BOLD)
+    center_text(win, 3, "║              V I C T O R Y               ║",
+                curses.color_pair(PAIR_TITLE) | curses.A_BOLD)
+    center_text(win, 4, "╚═════════════════════════════════════════╝",
+                curses.color_pair(PAIR_BORDER) | curses.A_BOLD)
+    center_text(win, 6, banner, curses.color_pair(PAIR_WARN) | curses.A_BOLD)
+    center_text(win, 7, sub, curses.color_pair(PAIR_ACCENT))
+
+    rows = list(_run_stats(gs).items())
+    bw = 52
+    bx = (w - bw) // 2
+    by = 9
+    _draw_stat_box(win, by, bx, bw, "FINAL STATS", rows)
+
+    fy = by + len(rows) + 5
+    center_text(win, fy, "Build fast.  Ship often.  Never look back.",
+                curses.color_pair(PAIR_ACCENT))
+    center_text(win, fy + 2,
+                "C: Continue Empire   •   R: New Game   •   Q: Quit",
+                curses.color_pair(PAIR_MUTED))
+
+
+# ─────────────────────── GAME OVER SCREEN ─────────────────────
+
+def draw_game_over(win, gs: GameState):
+    h, w = win.getmaxyx()
+    fill_background(win, PAIR_OVERLAY)
+
+    center_text(win, 2, "╔═════════════════════════════════════════╗",
+                curses.color_pair(PAIR_BORDER) | curses.A_BOLD)
+    center_text(win, 3, "║             G A M E   O V E R            ║",
+                curses.color_pair(PAIR_DANGER) | curses.A_BOLD)
+    center_text(win, 4, "╚═════════════════════════════════════════╝",
+                curses.color_pair(PAIR_BORDER) | curses.A_BOLD)
+    center_text(win, 6, "☠️  The runway ran out.  ☠️",
+                curses.color_pair(PAIR_DANGER) | curses.A_BOLD)
+    center_text(win, 7, gs.game_over_reason or "Insolvent for too long.",
+                curses.color_pair(PAIR_MUTED))
+
+    rows = list(_run_stats(gs).items())
+    bw = 52
+    bx = (w - bw) // 2
+    by = 9
+    _draw_stat_box(win, by, bx, bw, "RUN SUMMARY", rows)
+
+    # Graveyard preview
+    gy = by + len(rows) + 5
+    graveyard = getattr(gs, "graveyard", [])
+    if graveyard:
+        center_text(win, gy, "🪦  COMPANY GRAVEYARD  🪦",
+                    curses.color_pair(PAIR_WARN) | curses.A_BOLD)
+        gy += 1
+        for rec in graveyard[-4:]:
+            line = f"{rec.get('name','?')} ({rec.get('founded_year','?')}–{rec.get('closed_year','?')})"
+            center_text(win, gy, line[:w - 4], curses.color_pair(PAIR_MUTED))
+            gy += 1
+        gy += 1
+
+    center_text(win, gy + 1,
+                "R: New Game (start over)   •   Q: Quit",
+                curses.color_pair(PAIR_MUTED))
 
 
 # ─────────────────────── END DEMO SCREEN ──────────────────────

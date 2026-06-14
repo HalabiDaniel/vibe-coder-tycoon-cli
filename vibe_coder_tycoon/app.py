@@ -27,7 +27,7 @@ from .ui.screens.research import ResearchUIState, draw_research
 from .ui.screens.news import NewsUIState, draw_news
 from .ui.screens.events import draw_event_card
 from .ui.screens.help import draw_help
-from .ui.screens.demo_end import draw_demo_end
+from .ui.screens.demo_end import draw_demo_end, draw_victory, draw_game_over
 from .ui.screens.account import AccountUIState, draw_account, ACCOUNT_BUTTON_COUNT, account_button_label
 from .ui.screens.save_slots import SaveSlotsUIState, draw_save_slots
 from .ui.screens.sync_conflict import draw_sync_conflict, CONFLICT_OPTIONS
@@ -40,7 +40,7 @@ from .persistence import (
 from .engine import make_new_game, advance_month, dispatch
 from .cloud import CloudService
 from .constants import (
-    TABS, BACKGROUNDS, AI_SUBS, DEMO_MONTH_LIMIT, MONTH_NAMES,
+    TABS, BACKGROUNDS, AI_SUBS, DEMO_MONTH_LIMIT, DEMO_MODE, MONTH_NAMES,
     EMPLOYEE_ROLES, EMPLOYEE_TRAITS, RESEARCH_CATEGORIES,
     COMPANY_LEGAL_STYLES, COMPANY_FOCUS_AREAS, FUNDING_STYLES, RISK_APPETITES,
     PROJECT_TYPES, TECH_STACKS, NICHES, AUTO_DEPOSIT_CYCLE, FEATURE_SCOPES, QA_OPTIONS,
@@ -198,7 +198,11 @@ def main(stdscr):
                 screen = "title"
                 continue
 
-            if gs.demo_ended:
+            if gs.victory and not gs.endgame_continue:
+                draw_victory(stdscr, gs)
+            elif gs.game_over:
+                draw_game_over(stdscr, gs)
+            elif gs.demo_ended:
                 draw_demo_end(stdscr, gs)
             else:
                 fill_background(stdscr, PAIR_PANEL)
@@ -745,6 +749,37 @@ def main(stdscr):
                 screen = "title"
                 continue
 
+            # Phase 14 — victory screen: continue, restart, or quit
+            if gs.victory and not gs.endgame_continue:
+                if key == ord('q') or key == ord('Q'):
+                    if cloud_user_id and gs:
+                        _submit_game_run(cloud, cloud_user_id, gs)
+                    break
+                elif key == ord('c') or key == ord('C'):
+                    dispatch(gs, "continue_after_win")
+                    if cloud_user_id and gs:
+                        _submit_game_run(cloud, cloud_user_id, gs)
+                    status_msg = "Empire continues. Go bigger."
+                elif key == ord('r') or key == ord('R'):
+                    if cloud_user_id and gs:
+                        _submit_game_run(cloud, cloud_user_id, gs)
+                    screen = "title"
+                    gs = None
+                continue
+
+            # Phase 14 — game over: restart or quit
+            if gs.game_over:
+                if key == ord('q') or key == ord('Q'):
+                    if cloud_user_id and gs:
+                        _submit_game_run(cloud, cloud_user_id, gs)
+                    break
+                elif key == ord('r') or key == ord('R'):
+                    if cloud_user_id and gs:
+                        _submit_game_run(cloud, cloud_user_id, gs)
+                    screen = "title"
+                    gs = None
+                continue
+
             if gs.demo_ended:
                 if key == ord('q') or key == ord('Q'):
                     break
@@ -819,7 +854,7 @@ def main(stdscr):
                         else:
                             cloud_sync_status = "synced"
                             cloud_last_sync = _now_str()
-                if gs.months_elapsed >= DEMO_MONTH_LIMIT:
+                if DEMO_MODE and gs.months_elapsed >= DEMO_MONTH_LIMIT:
                     gs.demo_ended = True
                     if cloud_user_id:
                         _submit_game_run(cloud, cloud_user_id, gs)

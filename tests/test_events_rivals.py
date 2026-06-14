@@ -275,7 +275,7 @@ def test_persistence_round_trip_phase13():
     data = _gs_to_dict(gs, "Tester")
     gs2 = _dict_to_gs(data)
 
-    assert gs2.schema_version == 12
+    assert gs2.schema_version == 13
     assert gs2.event_cooldowns == {"hn_front_page": 3, "_global": 4}
     assert len(gs2.pending_event_cards) == 1
     assert gs2.pending_event_cards[0]["event_id"] == "burnout_warning"
@@ -291,7 +291,7 @@ def test_old_save_migrates_to_v12():
     data.pop("event_cooldowns", None)
     data.pop("pending_event_cards", None)
     gs2 = _dict_to_gs(data)
-    assert gs2.schema_version == 12
+    assert gs2.schema_version == 13
     assert gs2.rivals == []
     assert gs2.event_cooldowns == {}
     assert gs2.pending_event_cards == []

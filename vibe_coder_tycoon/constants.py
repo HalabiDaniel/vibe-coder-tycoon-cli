@@ -1008,6 +1008,64 @@ IPO_DUE_DILIGENCE_CHANCE   = 0.45     # chance the due-diligence event surfaces 
 # Net-worth / victory
 TRILLIONAIRE_THRESHOLD = 1_000_000_000_000
 
+# ─────────────────────── PHASE 14 — VICTORY / BANKRUPTCY / ENDGAME ──
+
+# Demo builds cap the run at DEMO_MONTH_LIMIT months. The full game disables
+# this so victory and bankruptcy endgames are reachable. Flip DEMO_MODE on for
+# a limited public/demo build.
+DEMO_MODE = False
+
+# Secondary victory: 1e12 lifetime tokens. total_tokens_used is tracked in
+# thousands (K) of tokens, so 1e9 internal units == 1e12 actual tokens.
+TOKEN_SINGULARITY_THRESHOLD = 1_000_000_000
+
+# A company that runs negative cash flow this many consecutive months (without a
+# manual bailout) goes bankrupt: it closes, products are discontinued, employees
+# are let go, and its loans default.
+BANKRUPTCY_MONTHS = 6
+
+# The player loses when broke (no solvent companies and no personal cash) for
+# this many consecutive months.
+GAME_OVER_MONTHS = 12
+
+# Milestone / achievement catalog. Each milestone fires once, the first month
+# its metric crosses `target`, and is persisted on the founder profile.
+# Metrics evaluated by engine/systems/victory.py:
+#   companies        — total companies founded
+#   employees        — employees on payroll right now
+#   launched         — products that have left development
+#   lifetime_revenue — Σ project lifetime revenue
+#   net_worth        — current net worth (personal + company cash + equity)
+#   public_companies — companies taken public
+#   player_models    — player-trained AI models
+#   templates        — internal templates built
+MILESTONES = [
+    {"id": "first_company",   "title": "Incorporated",   "metric": "companies",        "target": 1,
+     "desc": "Found your first company."},
+    {"id": "first_hire",      "title": "First Hire",      "metric": "employees",        "target": 1,
+     "desc": "Bring your first employee on board."},
+    {"id": "first_launch",    "title": "Ship It!",        "metric": "launched",         "target": 1,
+     "desc": "Launch your first product."},
+    {"id": "first_1k",        "title": "First $1K",       "metric": "lifetime_revenue", "target": 1_000,
+     "desc": "Earn your first $1,000 in lifetime revenue."},
+    {"id": "first_template",  "title": "Reusable",        "metric": "templates",        "target": 1,
+     "desc": "Build your first internal template."},
+    {"id": "real_team",       "title": "Real Team",       "metric": "employees",        "target": 5,
+     "desc": "Employ five people at once."},
+    {"id": "first_100k",      "title": "Six Figures",     "metric": "lifetime_revenue", "target": 100_000,
+     "desc": "Reach $100,000 in lifetime revenue."},
+    {"id": "millionaire",     "title": "Millionaire",     "metric": "net_worth",        "target": 1_000_000,
+     "desc": "Reach $1M net worth."},
+    {"id": "first_model",     "title": "Full Circle",     "metric": "player_models",    "target": 1,
+     "desc": "Train your first in-house AI model."},
+    {"id": "first_ipo",       "title": "Ring the Bell",   "metric": "public_companies", "target": 1,
+     "desc": "Take a company public."},
+    {"id": "billionaire",     "title": "Billionaire",     "metric": "net_worth",        "target": 1_000_000_000,
+     "desc": "Reach $1B net worth."},
+    {"id": "trillionaire",    "title": "Trillionaire",    "metric": "net_worth",        "target": TRILLIONAIRE_THRESHOLD,
+     "desc": "Reach $1T net worth — the dream."},
+]
+
 
 # ─────────────────────── PHASE 13 — EVENTS / RIVALS ──────────
 #

@@ -240,7 +240,7 @@ class GameState:
     research_progress: dict
     settings: dict
     demo_ended: bool = False
-    schema_version: int = 12
+    schema_version: int = 13
     # Phase 8 — templates (company-scoped internal assets)
     templates: list = field(default_factory=list)
     # Phase 7 — tech timeline / tools
@@ -262,6 +262,15 @@ class GameState:
     rivals: list = field(default_factory=list)            # list of RivalCompany
     event_cooldowns: dict = field(default_factory=dict)   # event_id -> months_elapsed last fired
     pending_event_cards: list = field(default_factory=list)  # choice-card dicts awaiting resolution
+    # Phase 14 — victory, bankruptcy, endgame
+    peak_net_worth: float = 0.0
+    victory: bool = False
+    victory_type: str = ""          # "" | "trillionaire" | "token_singularity"
+    endgame_continue: bool = False  # player chose to keep playing after a win
+    game_over: bool = False
+    game_over_reason: str = ""
+    broke_months: int = 0           # consecutive months fully insolvent
+    graveyard: list = field(default_factory=list)  # closed-company records
 
     def total_cash(self):
         return sum(c.cash for c in self.companies if c.active)

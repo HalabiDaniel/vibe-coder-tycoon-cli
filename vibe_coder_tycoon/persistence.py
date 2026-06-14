@@ -120,6 +120,14 @@ def _gs_to_dict(gs: GameState, username: str) -> dict:
         "rivals": [r.__dict__ for r in gs.rivals],
         "event_cooldowns": gs.event_cooldowns,
         "pending_event_cards": gs.pending_event_cards,
+        "peak_net_worth": gs.peak_net_worth,
+        "victory": gs.victory,
+        "victory_type": gs.victory_type,
+        "endgame_continue": gs.endgame_continue,
+        "game_over": gs.game_over,
+        "game_over_reason": gs.game_over_reason,
+        "broke_months": gs.broke_months,
+        "graveyard": gs.graveyard,
     }
 
 def save_game(gs: GameState, username: str) -> dict:
@@ -315,6 +323,17 @@ def _migrate(data: dict) -> dict:
         data.setdefault("event_cooldowns", {})
         data.setdefault("pending_event_cards", [])
         data["schema_version"] = 12
+    if version < 13:
+        # Phase 14: victory / bankruptcy / endgame state
+        data.setdefault("peak_net_worth", 0.0)
+        data.setdefault("victory", False)
+        data.setdefault("victory_type", "")
+        data.setdefault("endgame_continue", False)
+        data.setdefault("game_over", False)
+        data.setdefault("game_over_reason", "")
+        data.setdefault("broke_months", 0)
+        data.setdefault("graveyard", [])
+        data["schema_version"] = 13
     return data
 
 
@@ -514,6 +533,14 @@ def _dict_to_gs(data: dict) -> GameState:
         rivals=rivals,
         event_cooldowns=dict(data.get("event_cooldowns", {})),
         pending_event_cards=list(data.get("pending_event_cards", [])),
+        peak_net_worth=float(data.get("peak_net_worth", 0.0)),
+        victory=bool(data.get("victory", False)),
+        victory_type=data.get("victory_type", ""),
+        endgame_continue=bool(data.get("endgame_continue", False)),
+        game_over=bool(data.get("game_over", False)),
+        game_over_reason=data.get("game_over_reason", ""),
+        broke_months=int(data.get("broke_months", 0)),
+        graveyard=list(data.get("graveyard", [])),
     )
 
 

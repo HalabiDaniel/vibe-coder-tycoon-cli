@@ -100,16 +100,20 @@ def draw_dashboard(win, gs: GameState, selected_company_idx: int):
     total_rev  = sum(c.monthly_revenue for c in active)
     total_exp  = sum(c.monthly_expenses for c in active)
     total_proj = len([p for p in gs.projects if p.status not in ("Failed", "Sunset")])
+    from ...engine.systems.stocks import net_worth
+    months_label = (f"{gs.months_elapsed} / {DEMO_MONTH_LIMIT}"
+                    if DEMO_MODE else str(gs.months_elapsed))
     global_rows = [
         ("Date",           f"{MONTH_NAMES[gs.month-1]} {gs.year}"),
         ("Total Cash",     f"${gs.total_cash():,}"),
+        ("Net Worth",      f"${net_worth(gs):,.0f}"),
         ("Monthly Revenue",f"${total_rev:,}"),
         ("Monthly Expenses",f"${total_exp:,}"),
         ("Founder Burnout",f"{gs.founder.burnout}%"),
         ("Founder Rep",    f"{gs.founder.reputation}/100"),
         ("Active Projects",str(total_proj)),
         ("AI Subscription",AI_SUBS[gs.active_ai_sub_idx]["name"]),
-        ("Months Elapsed", f"{gs.months_elapsed} / {DEMO_MONTH_LIMIT}"),
+        ("Months Elapsed", months_label),
     ]
     for label, val in global_rows:
         safe_addstr(win, ry, rx+2, f"{label:<22}", curses.color_pair(PAIR_MUTED))

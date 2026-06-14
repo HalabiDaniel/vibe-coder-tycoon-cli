@@ -26,6 +26,7 @@ from .systems import stocks           # registers stock/IPO actions (Phase 12)
 from .systems import events           # registers event-card resolution (Phase 13)
 from .systems import rivals           # background rival system (Phase 13)
 from .systems import content          # procedural content engine (Phase 13)
+from .systems import victory          # victory/bankruptcy/endgame (Phase 14)
 
 
 def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
@@ -146,6 +147,10 @@ def advance_month(gs: GameState) -> str:
 
     # Phase 13: weighted random event (after vibe/sanity/rep settled this month)
     events_this_month.extend(events.monthly_event_tick(gs))
+
+    # Phase 14: bankruptcies, victory/game-over checks, milestone achievements.
+    # Runs last so it reflects all settlement (months_negative, cash, tokens).
+    events_this_month.extend(victory.endgame_tick(gs))
 
     # Employee mood drift
     for emp in gs.employees:
