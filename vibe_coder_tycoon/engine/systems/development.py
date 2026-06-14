@@ -64,15 +64,19 @@ def tick_dev_project(gs: GameState, p) -> list:
         _add_log(ds, "⏸  Dev blocked — resolve the interruption to continue.")
         return events
 
-    sub = AI_SUBS[gs.active_ai_sub_idx]
+    # Phase 7: the project's chosen model + active IDE/subscription drive dev.
+    from .models_ai import get_model_stats, get_dev_modifiers
+    sub = get_model_stats(gs, p.model)
+    tool_mods = get_dev_modifiers(gs)
     vibe_mult = get_vibe_multiplier(gs)
     scope_data = FEATURE_SCOPES.get(p.scope, FEATURE_SCOPES["Standard"])
 
     # Phase 4: focus bonuses for the project's company
     company = gs.company_by_id(p.company_id)
     focus = get_focus_data(company.focus_area) if company else None
-    dev_speed_mult = focus["dev_speed_mult"] if focus else 1.0
-    token_cost_mult = focus["token_cost_mult"] if focus else 1.0
+    dev_speed_mult = (focus["dev_speed_mult"] if focus else 1.0) * tool_mods["dev_speed_mult"]
+    token_cost_mult = (focus["token_cost_mult"] if focus else 1.0) * tool_mods["token_mult"]
+    bug_tool_mult = tool_mods["bug_mult"]
     if company:
         token_cost_mult *= get_synergy_bonus(gs, company)
 
@@ -98,8 +102,8 @@ def tick_dev_project(gs: GameState, p) -> list:
         p.design_score = min(100.0, p.design_score + design_gain)
         p.tech_score   = min(100.0, p.tech_score   + tech_gain)
 
-        # Bug generation: vibe multiplies chaos, team QA suppresses it
-        if random.random() < sub["bug_risk"] * vibe_mult * 0.03 * bug_team_mult:
+        # Bug generation: vibe multiplies chaos, team QA + IDE suppress it
+        if random.random() < sub["bug_risk"] * vibe_mult * 0.03 * bug_team_mult * bug_tool_mult:
             p.bug_count += 1
 
         # Token consumption per day (reduced by focus token_cost_mult)
@@ -107,8 +111,9 @@ def tick_dev_project(gs: GameState, p) -> list:
         consume_tokens(gs, token_day)
         p.tokens_used += token_day
 
-        # Interruption check every ~10 days
-        if p.dev_day % 10 == 0:
+        # Interruption check every ~10 days (but never on the final day — there's
+        # nothing left to block once the work is already done).
+        if p.dev_day % 10 == 0 and p.dev_day < p.dev_total_days:
             _check_interruption(gs, p)
             if ds.pending_interruption:
                 interrupted = True

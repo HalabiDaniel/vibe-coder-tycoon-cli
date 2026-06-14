@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 from ..colors import *
 from ..helpers import *
-from ...constants import ROLE_CATALOG, TRAINING_ACTIONS, xp_threshold
+from ...constants import ROLE_CATALOG, TRAINING_ACTIONS, xp_threshold, CONDITIONS
 from ...models import GameState
 from ...engine.systems.companies import get_office_employee_cap, get_all_unlocked_roles
 
@@ -67,7 +67,12 @@ def _draw_list(win, gs: GameState, ui: EmployeesUIState):
             assigned = gs.projects[emp.assigned_project_id].name[:15]
         else:
             assigned = "—"
-        state = "🌴 grass" if emp.state == "touch_grass" else "active"
+        if emp.state == "touch_grass":
+            state = "🌴 grass"
+        elif emp.condition:
+            state = f"🧠 {emp.condition[:8]}"
+        else:
+            state = "active"
         xp_need = xp_threshold(emp.level)
         row = (f"  {emp.name:<18} {emp.role:<17} "
                f"{'★'*min(emp.level,3):<3} ${emp.salary:>7,} "
@@ -93,12 +98,20 @@ def _draw_list(win, gs: GameState, ui: EmployeesUIState):
         _stat_cell(win, sy + 2, 4, "SANE", emp.sanity)
         safe_addstr(win, sy + 3, 4, f"Level {emp.level}   Mood {emp.mood}%   Trait: {emp.trait or 'None'}",
                     curses.color_pair(PAIR_MUTED))
-        if emp.backstory:
+        # Phase 6: condition + resolution hint
+        if emp.condition:
+            info = CONDITIONS.get(emp.condition, {})
+            cp = PAIR_DANGER if info.get("stat_mult", 1) < 1 else PAIR_WARN
+            safe_addstr(win, sy + 4, 4, f"🧠 {emp.condition}: {info.get('effect', '')}"[:mid - 6],
+                        curses.color_pair(cp) | curses.A_BOLD)
+            safe_addstr(win, sy + 5, 6, f"→ Fix: {info.get('resolution', '')}"[:mid - 8],
+                        curses.color_pair(PAIR_MUTED))
+        elif emp.backstory:
             safe_addstr(win, sy + 4, 4, emp.backstory[:mid - 8], curses.color_pair(PAIR_MUTED) | curses.A_DIM)
 
         # Right: actions
         actions = ["Enter: Assign to Project", "U: Unassign", "T: Train",
-                   "R: Rest Day", "F: Lay Off"]
+                   "R: Rest Day", "I: Inspire", "G: Distraction", "F: Lay Off"]
         rx = mid + 2
         ry = y + 1
         for a in actions:
@@ -117,7 +130,7 @@ def _draw_list(win, gs: GameState, ui: EmployeesUIState):
     if ui.message:
         safe_addstr(win, h - 6, 2, ui.message[:w - 4], curses.color_pair(PAIR_ACCENT) | curses.A_BOLD)
     safe_addstr(win, h - 3, 2,
-                "Up/Down: select | H: hire | Enter: assign | U: unassign | T: train | R: rest | F: fire",
+                "Up/Dn select | H hire | Enter assign | U unassign | T train | R rest | I inspire | G distract | F fire",
                 curses.color_pair(PAIR_MUTED))
 
 

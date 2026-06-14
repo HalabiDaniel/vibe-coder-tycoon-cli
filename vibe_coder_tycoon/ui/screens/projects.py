@@ -261,7 +261,8 @@ def _draw_new_project_wizard(win, gs: GameState, ui: ProjectsUIState):
 
         name     = ui.new_fields[0]["value"] or "Unnamed"
         ptype    = PROJECT_TYPES[ui.new_fields[1]["selected"]]
-        sub_name = [s["name"] for s in AI_SUBS][ui.new_fields[2]["selected"]]
+        _mopts   = ui.new_fields[2].get("options", [s["name"] for s in AI_SUBS])
+        sub_name = _mopts[ui.new_fields[2]["selected"]] if _mopts else "—"
         stack    = TECH_STACKS[ui.new_fields[3]["selected"]]
         niche    = NICHES[ui.new_fields[4]["selected"]]
         scope    = ["Lean MVP", "Standard", "Feature-Rich", "Overengineered"][ui.new_fields[5]["selected"]]
@@ -270,8 +271,8 @@ def _draw_new_project_wizard(win, gs: GameState, ui: ProjectsUIState):
         try:    weeks  = int(ui.new_fields[7]["value"])
         except: weeks  = 4
 
-        sub_idx = ui.new_fields[2]["selected"]
-        bug_risk = AI_SUBS[sub_idx]["bug_risk"]
+        from ...engine.systems.models_ai import get_model_stats
+        bug_risk = get_model_stats(gs, sub_name)["bug_risk"]
         cost_est = budget + weeks * 200
         launch_risk = "HIGH" if weeks < 3 else "MEDIUM" if weeks < 7 else "LOW"
         hype_est = "HIGH" if scope == "Feature-Rich" else "MEDIUM"

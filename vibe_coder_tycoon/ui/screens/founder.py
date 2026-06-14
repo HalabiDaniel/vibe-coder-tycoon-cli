@@ -2,7 +2,7 @@ import curses
 
 from ..colors import *
 from ..helpers import *
-from ...constants import BACKGROUNDS, AI_SUBS, TOKEN_MILESTONES
+from ...constants import BACKGROUNDS, AI_SUBS, TOKEN_MILESTONES, FOUNDER_CONDITIONS
 
 
 # ─────────────────────── FOUNDER TAB ──────────────────────────
@@ -73,6 +73,25 @@ def draw_founder(win, gs):
     progress_bar(win, y, 20, bar_w, f.burnout, burn_pair, PAIR_MUTED)
     safe_addstr(win, y, 20 + bar_w + 1, f"{f.burnout:3d}%",
                 curses.color_pair(burn_pair))
+    y += 2
+
+    # ── Mental health: conditions + wired actions ──────────────
+    safe_addstr(win, y, 4, "MENTAL HEALTH", curses.color_pair(PAIR_TITLE) | curses.A_BOLD)
+    y += 1
+    if f.conditions:
+        for cond in f.conditions:
+            info = FOUNDER_CONDITIONS.get(cond, {})
+            safe_addstr(win, y, 4, f"  ⚠ {cond}", curses.color_pair(PAIR_DANGER) | curses.A_BOLD)
+            safe_addstr(win, y, 4 + len(cond) + 5, info.get("effect", "")[:mid - 30],
+                        curses.color_pair(PAIR_MUTED))
+            y += 1
+    else:
+        safe_addstr(win, y, 4, "  No active conditions. Keep it that way.",
+                    curses.color_pair(PAIR_MUTED))
+        y += 1
+    safe_addstr(win, y, 4,
+                "[ B: Take a Break ]  [ R: Team Recharge ]  [ T: Inspire Team ]",
+                curses.color_pair(PAIR_BUTTON) | curses.A_BOLD)
     y += 2
 
     # Skills

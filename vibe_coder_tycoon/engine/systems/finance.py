@@ -69,6 +69,7 @@ def consume_tokens(gs: GameState, amount: int) -> list:
     events = []
     before = gs.founder.total_tokens_used
     gs.founder.total_tokens_used += amount
+    gs.tokens_this_month += amount   # Phase 7: billed on API subscription tiers
     after = gs.founder.total_tokens_used
     date_str = f"{MONTH_NAMES[gs.month - 1]} {gs.year}"
     for threshold, title in TOKEN_MILESTONES:

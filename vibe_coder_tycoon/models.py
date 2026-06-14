@@ -94,6 +94,9 @@ class Employee:
     state: str = "active"           # "active" | "touch_grass"
     state_until: int = 0            # months_elapsed when they return to active
     backstory: str = ""
+    # Phase 6 — mental health
+    condition: str = ""             # active named condition, "" if none
+    condition_until: int = 0        # months_elapsed when a timed condition clears
 
 
 @dataclass
@@ -143,6 +146,8 @@ class Founder:
     personal_cash: float = 1000.0
     vibe: float = 50.0
     sanity: int = 100
+    # Phase 6 — mental health
+    conditions: list = field(default_factory=list)
 
 
 @dataclass
@@ -160,7 +165,13 @@ class GameState:
     research_progress: dict
     settings: dict
     demo_ended: bool = False
-    schema_version: int = 6
+    schema_version: int = 7
+    # Phase 7 — tech timeline / tools
+    current_era: str = "The Discovery Era"
+    subscription_tier: str = "Pro"
+    active_ide: str = "CodeBox"
+    active_model: str = ""          # selected default AI model (parody name)
+    tokens_this_month: int = 0      # token consumption since last settlement
 
     def total_cash(self):
         return sum(c.cash for c in self.companies if c.active)

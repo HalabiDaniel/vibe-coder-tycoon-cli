@@ -16,6 +16,8 @@ from .systems import development    # registers dev actions as a side-effect
 from .systems import products       # registers product actions as a side-effect
 from .systems import companies      # registers company/office actions as a side-effect
 from .systems import employees       # registers employee actions as a side-effect
+from .systems import mental_health   # registers mental-health actions (Phase 6)
+from .systems import models_ai       # registers model/IDE/subscription actions (Phase 7)
 
 
 def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
@@ -53,6 +55,11 @@ def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
         research_progress={},
         settings=default_settings(),
     )
+    # Phase 7: derive the starting era and seed a sensible default model/tier/IDE.
+    gs.current_era = models_ai.era_for_year(gs.year)
+    names = models_ai.available_model_names(gs)
+    if names:
+        gs.active_model = names[0]
     return gs
 
 
@@ -82,9 +89,8 @@ def advance_month(gs: GameState) -> str:
     date_str = f"{MONTH_NAMES[gs.month - 1]} {gs.year}"
     events_this_month = []
 
-    # Finance settlement (Phase 1): replaces the old inline cash loop
-    finance_events = finance.monthly_settlement(gs)
-    events_this_month.extend(finance_events)
+    # Phase 7: era transitions + model release news (acts on year boundaries)
+    events_this_month.extend(models_ai.timeline_tick(gs))
 
     # Progress in-dev projects via development system; tick launched products
     for p in gs.projects:
@@ -95,13 +101,17 @@ def advance_month(gs: GameState) -> str:
             prod_events = products.monthly_product_tick(gs, p, date_str)
             events_this_month.extend(prod_events)
 
-    # Founder burnout
-    burnout_delta = random.randint(-2, 5) - gs.founder.skill_management // 20
-    gs.founder.burnout = max(0, min(100, gs.founder.burnout + burnout_delta))
-    if gs.founder.burnout > 80:
-        events_this_month.append(
-            ("⚠️", "Founder burnout critical! Take a rest.", "bad", date_str)
-        )
+    # Phase 6: mental-health settlement (employee sanity, conditions, founder)
+    events_this_month.extend(mental_health.monthly_tick(gs))
+
+    # Finance settlement (Phase 1) + Phase 7 subscription costs. Run after the
+    # dev tick so this month's token consumption bills correctly on API tiers.
+    finance_events = finance.monthly_settlement(gs)
+    events_this_month.extend(finance_events)
+    events_this_month.extend(models_ai.subscription_settlement(gs))
+
+    # Founder burnout tracks inverse sanity for legacy displays.
+    gs.founder.burnout = max(0, min(100, 100 - gs.founder.sanity))
 
     # Reputation drift
     finance.adjust_reputation(gs, random.randint(-1, 3))

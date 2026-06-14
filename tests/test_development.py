@@ -176,7 +176,8 @@ def test_light_qa_reduces_bugs():
     p.dev_day = 29
     advance_month(gs)
     if p.status == "Dev Complete":
-        assert p.bug_count <= 10  # bug_mult 0.6 should reduce
+        # bug_mult 0.6 reduces; Light QA's 5% critical flaw can add +5 (→11 worst case)
+        assert p.bug_count <= 11
 
 
 def test_full_qa_reduces_bugs_most():

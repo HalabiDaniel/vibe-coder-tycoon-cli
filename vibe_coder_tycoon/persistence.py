@@ -105,6 +105,11 @@ def _gs_to_dict(gs: GameState, username: str) -> dict:
         "events": gs.events,
         "research_progress": gs.research_progress,
         "settings": gs.settings,
+        "current_era": gs.current_era,
+        "subscription_tier": gs.subscription_tier,
+        "active_ide": gs.active_ide,
+        "active_model": gs.active_model,
+        "tokens_this_month": gs.tokens_this_month,
     }
 
 def save_game(gs: GameState, username: str) -> dict:
@@ -239,6 +244,23 @@ def _migrate(data: dict) -> dict:
             e.setdefault("state_until", 0)
             e.setdefault("backstory", "")
         data["schema_version"] = 6
+    if version < 7:
+        # Phase 6: employee/founder mental-health fields
+        for e in data.get("employees", []):
+            e.setdefault("condition", "")
+            e.setdefault("condition_until", 0)
+        fd = data.get("founder") or {}
+        fd.setdefault("conditions", [])
+        data["founder"] = fd
+        # Phase 7: tech-timeline / tools state on the game
+        year = data.get("year", 2025)
+        from .engine.systems.models_ai import era_for_year
+        data.setdefault("current_era", era_for_year(year))
+        data.setdefault("subscription_tier", "Pro")
+        data.setdefault("active_ide", "CodeBox")
+        data.setdefault("active_model", "")
+        data.setdefault("tokens_this_month", 0)
+        data["schema_version"] = 7
     return data
 
 
@@ -263,6 +285,7 @@ def _dict_to_gs(data: dict) -> GameState:
             personal_cash=float(fd.get("personal_cash", 1000.0)),
             vibe=float(fd.get("vibe", 50.0)),
             sanity=int(fd.get("sanity", 100)),
+            conditions=list(fd.get("conditions", [])),
         )
     else:
         founder = None
@@ -334,6 +357,7 @@ def _dict_to_gs(data: dict) -> GameState:
         "company_id", "trait", "loyalty", "productivity",
         "coding", "prompting", "research", "marketing", "sanity", "xp",
         "assigned_project_id", "state", "state_until", "backstory",
+        "condition", "condition_until",
     }
 
     def _load_employee(ed: dict) -> Employee:
@@ -356,6 +380,11 @@ def _dict_to_gs(data: dict) -> GameState:
         research_progress=data.get("research_progress", {}),
         settings=data.get("settings", default_settings()),
         schema_version=data.get("schema_version", 2),
+        current_era=data.get("current_era", "The Discovery Era"),
+        subscription_tier=data.get("subscription_tier", "Pro"),
+        active_ide=data.get("active_ide", "CodeBox"),
+        active_model=data.get("active_model", ""),
+        tokens_this_month=int(data.get("tokens_this_month", 0)),
     )
 
 

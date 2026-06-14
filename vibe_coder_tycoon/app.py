@@ -20,7 +20,7 @@ from .ui.screens.companies import CompaniesUIState, draw_companies
 from .ui.screens.projects import ProjectsUIState, draw_projects
 from .ui.screens.development import DevUIState, draw_development
 from .ui.screens.employees import EmployeesUIState, draw_employees, _assignable_projects
-from .ui.screens.market import draw_market
+from .ui.screens.market import draw_market, MarketUIState
 from .ui.screens.research import ResearchUIState, draw_research
 from .ui.screens.news import NewsUIState, draw_news
 from .ui.screens.help import draw_help
@@ -112,6 +112,7 @@ def main(stdscr):
     dev_ui        = DevUIState()
     employees_ui  = EmployeesUIState()
     research_ui   = ResearchUIState()
+    market_ui     = MarketUIState()
     news_ui       = NewsUIState()
     account_ui    = AccountUIState()
     save_slots_ui = SaveSlotsUIState()
@@ -213,7 +214,7 @@ def main(stdscr):
                 elif tab == "Employees":
                     draw_employees(stdscr, gs, employees_ui)
                 elif tab == "Market":
-                    draw_market(stdscr, gs)
+                    draw_market(stdscr, gs, market_ui)
                 elif tab == "Research":
                     draw_research(stdscr, gs, research_ui)
                 elif tab == "News":
@@ -976,6 +977,13 @@ def main(stdscr):
                             projects_ui.view = "new"
                             projects_ui.new_step = 0
                             projects_ui.message = ""
+                            # Phase 7: offer only year-unlocked AI models in the wizard.
+                            from .engine.systems.models_ai import available_model_names
+                            names = available_model_names(gs)
+                            mf = projects_ui.new_fields[2]
+                            mf["options"] = names
+                            mf["selected"] = (names.index(gs.active_model)
+                                              if gs.active_model in names else 0)
                         else:
                             status_msg = "Create a company first before adding a project."
                     elif key in (10, curses.KEY_ENTER):
@@ -1141,11 +1149,69 @@ def main(stdscr):
                             result = dispatch(gs, "rest_employee", emp_index=eui.selected)
                             eui.message = ("✓ " if result.ok else "✗ ") + result.message
                             status_msg = result.message
+                        elif key in (ord('i'), ord('I')):
+                            result = dispatch(gs, "inspirational_talk", emp_index=eui.selected)
+                            eui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                        elif key in (ord('g'), ord('G')):
+                            result = dispatch(gs, "distraction", emp_index=eui.selected)
+                            eui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
                         elif key in (ord('f'), ord('F')):
                             result = dispatch(gs, "fire_employee", emp_index=eui.selected)
                             eui.message = ("✓ " if result.ok else "✗ ") + result.message
                             status_msg = result.message
                             eui.selected = max(0, eui.selected - 1)
+
+            elif tab == "Founder":
+                if key in (ord('b'), ord('B')):
+                    status_msg = dispatch(gs, "founder_take_break").message
+                elif key in (ord('r'), ord('R')):
+                    # Team Recharge on the active company with the most worn-out team.
+                    def _avg_sanity(cid):
+                        team = [e for e in gs.employees_for_company(cid) if e.state == "active"]
+                        return sum(e.sanity for e in team) / len(team) if team else 999
+                    cos = gs.active_companies()
+                    if cos:
+                        target = min(cos, key=lambda c: _avg_sanity(c.id))
+                        status_msg = dispatch(gs, "team_recharge", company_id=target.id).message
+                    else:
+                        status_msg = "No company to recharge."
+                elif key in (ord('t'), ord('T')):
+                    active_emps = [(i, e) for i, e in enumerate(gs.employees) if e.state == "active"]
+                    if active_emps:
+                        idx, _ = min(active_emps, key=lambda pair: pair[1].sanity)
+                        status_msg = dispatch(gs, "inspirational_talk", emp_index=idx).message
+                    else:
+                        status_msg = "No employees to inspire."
+
+            elif tab == "Market":
+                from .engine.systems.models_ai import (
+                    available_models, available_ides,
+                )
+                from .constants import SUBSCRIPTION_TIERS
+                models = available_models(gs)
+                if key == curses.KEY_UP:
+                    market_ui.model_sel = max(0, market_ui.model_sel - 1)
+                elif key == curses.KEY_DOWN:
+                    market_ui.model_sel = min(max(0, len(models) - 1),
+                                              market_ui.model_sel + 1)
+                elif key in (10, curses.KEY_ENTER):
+                    if models and 0 <= market_ui.model_sel < len(models):
+                        name = models[market_ui.model_sel]["name"]
+                        result = dispatch(gs, "set_active_model", model_name=name)
+                        status_msg = result.message
+                elif key in (ord('s'), ord('S')):
+                    tiers = [t["name"] for t in SUBSCRIPTION_TIERS]
+                    cur = tiers.index(gs.subscription_tier) if gs.subscription_tier in tiers else 0
+                    nxt = tiers[(cur + 1) % len(tiers)]
+                    status_msg = dispatch(gs, "set_subscription_tier", tier=nxt).message
+                elif key in (ord('i'), ord('I')):
+                    ides = [i["name"] for i in available_ides(gs)]
+                    if ides:
+                        cur = ides.index(gs.active_ide) if gs.active_ide in ides else 0
+                        nxt = ides[(cur + 1) % len(ides)]
+                        status_msg = dispatch(gs, "set_active_ide", ide_name=nxt).message
 
             elif tab == "Research":
                 if key == curses.KEY_UP:
@@ -1338,7 +1404,9 @@ def _handle_new_project_keys(key, ui: ProjectsUIState, gs: GameState, status_msg
         if key in (10, curses.KEY_ENTER):
             name     = ui.new_fields[0]["value"].strip() or "Unnamed Project"
             ptype    = PROJECT_TYPES[ui.new_fields[1]["selected"]]
-            sub_name = [s["name"] for s in AI_SUBS][ui.new_fields[2]["selected"]]
+            model_field = ui.new_fields[2]
+            model_opts = model_field.get("options", [s["name"] for s in AI_SUBS])
+            sub_name = model_opts[model_field["selected"]] if model_opts else gs.active_model
             stack    = TECH_STACKS[ui.new_fields[3]["selected"]]
             niche    = NICHES[ui.new_fields[4]["selected"]]
             scope    = ["Lean MVP", "Standard", "Feature-Rich", "Overengineered"][ui.new_fields[5]["selected"]]

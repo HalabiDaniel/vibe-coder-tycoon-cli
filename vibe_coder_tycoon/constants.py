@@ -651,3 +651,143 @@ TRAINING_ACTIONS = [
 def xp_threshold(level: int) -> int:
     return 100 * max(1, level)
 
+
+# ─────────────────────── PHASE 6 — MENTAL HEALTH ──────────────
+#
+# Named conditions applied when sanity / vibe thresholds are crossed. Each has a
+# stat multiplier applied to the employee's development contribution, plus a
+# human-readable resolution hint surfaced in the UI. "Touch Grass" is handled
+# specially (the employee leaves for ~1 month then auto-returns).
+
+CONDITIONS = {
+    "Burnout": {
+        "trigger": "Sanity under 20%",
+        "effect": "-50% to all work output",
+        "resolution": "Rest day or Team Recharge",
+        "stat_mult": 0.5,
+        "resolve_action": "rest",
+    },
+    "Existential Crisis": {
+        "trigger": "Sanity under 10%",
+        "effect": "Questions whether vibe coding is real coding. -70% output",
+        "resolution": "Inspirational Talk (costs founder Vibe)",
+        "stat_mult": 0.3,
+        "resolve_action": "inspire",
+    },
+    "Framework Fatigue": {
+        "trigger": "Company pivoted focus recently",
+        "effect": "-30% output, grumbles about the new stack",
+        "resolution": "Give it time (fades on its own)",
+        "stat_mult": 0.7,
+        "resolve_action": "wait",
+    },
+    "Startup Mania": {
+        "trigger": "Founder Vibe over 90",
+        "effect": "+40% speed but Sanity drains fast",
+        "resolution": "Fades after the current project ships",
+        "stat_mult": 1.4,
+        "resolve_action": "wait",
+    },
+    "AI Doom Spiral": {
+        "trigger": "Read too many AI-doom forum threads",
+        "effect": "-80% output for a while",
+        "resolution": "Distraction action",
+        "stat_mult": 0.2,
+        "resolve_action": "distract",
+    },
+}
+
+# Founder-only conditions (mirror the employee model at the player level)
+FOUNDER_CONDITIONS = {
+    "Founder Burnout": {
+        "trigger": "Sanity under 25%",
+        "effect": "Global negative-event chance rises",
+        "resolution": "Take a Break (Founder action)",
+    },
+    "Doom Scrolling": {
+        "trigger": "Sanity under 15%",
+        "effect": "Productivity and judgement suffer",
+        "resolution": "Take a Break (Founder action)",
+    },
+}
+
+# Mental-health action costs/effects
+TEAM_RECHARGE_COST = 1000      # per company, restores team sanity
+INSPIRE_VIBE_COST = 15.0       # founder vibe spent on an Inspirational Talk
+DISTRACTION_COST = 250         # cash cost of a Distraction action
+
+
+# ─────────────────────── PHASE 7 — TECH TIMELINE ──────────────
+#
+# Eras gate the "feel" of the run and unlock new content over time (GDD §20).
+# Each entry is (start_year, name, blurb). The current era is the last whose
+# start_year <= current in-game year.
+
+ERAS = [
+    (2022, "The Discovery Era",
+     "The world just realised AI can write code. Everyone is shocked. Tools are limited."),
+    (2024, "The Builder Era",
+     "AI coding assistants go mainstream. Everyone is shipping SaaS. Quality starts to matter."),
+    (2027, "The Agent Era",
+     "Autonomous agents handle real workloads. Teams shrink. Infra costs explode."),
+    (2031, "The Automation Era",
+     "AI companies dominate. Foundation models are the new platform. Build or depend."),
+    (2036, "The God Complex Era",
+     "AGI-class products become thinkable. Your net worth nears the trillionaire line."),
+]
+
+# IDE catalog (parody names, release year, development bonuses). dev_speed_mult
+# scales Design/Tech gain; bug_mult < 1.0 reduces bugs; token_mult < 1.0 saves
+# tokens. CodeBox is the free neutral baseline (always available).
+IDE_CATALOG = [
+    {"name": "CodeBox", "company": "Open Source", "year": 2022,
+     "desc": "The free, neutral baseline editor. Reliable, unremarkable.",
+     "dev_speed_mult": 1.0, "bug_mult": 1.0, "token_mult": 1.0},
+    {"name": "Replicity AI", "company": "Replicity AI", "year": 2022,
+     "desc": "Browser IDE where beginners accidentally ship a SaaS.",
+     "dev_speed_mult": 1.05, "bug_mult": 1.05, "token_mult": 1.0},
+    {"name": "GitHub CoPilotter", "company": "Macrosoft", "year": 2022,
+     "desc": "Finishes your function, then asks you to check the imports.",
+     "dev_speed_mult": 1.1, "bug_mult": 1.0, "token_mult": 1.0},
+    {"name": "MousePointer", "company": "MousePointer AI", "year": 2023,
+     "desc": "Makes you feel like a CEO until it rewrites the auth system.",
+     "dev_speed_mult": 1.15, "bug_mult": 1.0, "token_mult": 1.0},
+    {"name": "Windserve", "company": "Incognito AI", "year": 2023,
+     "desc": "Rides the vibe-coding wave so hard it's basically a surfboard.",
+     "dev_speed_mult": 1.1, "bug_mult": 0.95, "token_mult": 1.0},
+    {"name": "FastBrainsy AI", "company": "FastBrainsy AI", "year": 2024,
+     "desc": "Powerful once you find it behind 47 enterprise menus.",
+     "dev_speed_mult": 1.12, "bug_mult": 0.92, "token_mult": 0.95},
+    {"name": "Clod Code", "company": "Anthrowpick", "year": 2025,
+     "desc": "Polite terminal wizard. Writes a 19-step plan to rename a variable.",
+     "dev_speed_mult": 1.18, "bug_mult": 0.85, "token_mult": 0.9},
+    {"name": "Codecks", "company": "OpenAy", "year": 2025,
+     "desc": "Opens six branches, fixes one bug, leaves a mysterious helper file.",
+     "dev_speed_mult": 1.2, "bug_mult": 0.9, "token_mult": 0.95},
+    {"name": "Keero", "company": "Rainforest", "year": 2025,
+     "desc": "Turns 'make me an app' into specs, diagrams, tasks, and a meeting.",
+     "dev_speed_mult": 1.2, "bug_mult": 0.8, "token_mult": 1.0},
+    {"name": "Tray AI", "company": "Byron ByteDance", "year": 2025,
+     "desc": "Promises 10x productivity, 3x confusion, one dramatic sidebar.",
+     "dev_speed_mult": 1.15, "bug_mult": 0.95, "token_mult": 0.95},
+    {"name": "Googol AntiGravity", "company": "Googol DeepMine", "year": 2025,
+     "desc": "Agents float around your project while Google adds a dashboard.",
+     "dev_speed_mult": 1.22, "bug_mult": 0.85, "token_mult": 0.9},
+]
+
+# Subscription tiers (GDD §15). monthly is a flat founder-level cost; the API
+# tier instead bills per token consumed during development. speed_mult nudges
+# development; open_only restricts to open-weight models (self-hosting).
+SUBSCRIPTION_TIERS = [
+    {"name": "Free", "monthly": 0, "per_token": 0.0, "speed_mult": 0.85,
+     "open_only": False, "desc": "Basic access. Slow, rate-limited, humbling."},
+    {"name": "Pro", "monthly": 20, "per_token": 0.0, "speed_mult": 1.0,
+     "open_only": False, "desc": "Better models, fewer limits. The default."},
+    {"name": "Pro+", "monthly": 200, "per_token": 0.0, "speed_mult": 1.1,
+     "open_only": False, "desc": "Top current models, priority speed."},
+    {"name": "API Usage", "monthly": 0, "per_token": 0.03, "speed_mult": 1.15,
+     "open_only": False, "desc": "Uncapped speed. You pay per token you burn."},
+    {"name": "Self-Hosted", "monthly": 60, "per_token": 0.0, "speed_mult": 0.95,
+     "open_only": True, "desc": "Run open-weight models on your own hardware."},
+]
+

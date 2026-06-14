@@ -95,14 +95,17 @@ def get_project_team_bonus(gs: GameState, project_idx: int) -> dict:
     if not team:
         return {"design_mult": 1.0, "tech_mult": 1.0, "bug_mult": 1.0}
 
+    from .mental_health import employee_stat_mult  # Phase 6 condition scaling
+
     design_sum = 0.0
     tech_sum = 0.0
     qa_sum = 0.0
     for e in team:
-        design_sum += (e.prompting * 0.5 + e.coding * 0.3 + e.marketing * 0.2) / 100.0
-        tech_sum += (e.coding * 0.6 + e.research * 0.4) / 100.0
+        cm = employee_stat_mult(e)
+        design_sum += cm * (e.prompting * 0.5 + e.coding * 0.3 + e.marketing * 0.2) / 100.0
+        tech_sum += cm * (e.coding * 0.6 + e.research * 0.4) / 100.0
         # Bug-hunting power: research-heavy roles reduce bugs most
-        qa_sum += (e.research * 0.6 + e.coding * 0.4) / 100.0
+        qa_sum += cm * (e.research * 0.6 + e.coding * 0.4) / 100.0
 
     return {
         "design_mult": 1.0 + design_sum * 0.25,
