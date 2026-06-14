@@ -150,6 +150,14 @@ class Company:
     datacenter_tier: int = 0
     compute_capacity: int = 0       # mirrors datacenter tier capacity
     compute_for_sale: bool = False
+    # Phase 12 — stock market / IPO
+    is_public: bool = False
+    ipo_stage: str = ""             # "" | "Pricing" | "Trading"
+    share_price: float = 0.0
+    shares_outstanding: int = 0
+    player_equity_pct: float = 1.0  # founder's retained equity fraction
+    positive_mrr_streak: int = 0    # consecutive months of positive MRR
+    share_price_history: list = field(default_factory=list)  # recent daily prices
 
 
 @dataclass
@@ -219,7 +227,7 @@ class GameState:
     research_progress: dict
     settings: dict
     demo_ended: bool = False
-    schema_version: int = 10
+    schema_version: int = 11
     # Phase 8 — templates (company-scoped internal assets)
     templates: list = field(default_factory=list)
     # Phase 7 — tech timeline / tools
@@ -235,6 +243,8 @@ class GameState:
     funding_deals: list = field(default_factory=list)     # list of FundingDeal
     pending_offers: list = field(default_factory=list)    # list of dicts (not yet accepted)
     loan_default_count: int = 0
+    # Phase 12 — stock market snapshot (parody index + parody companies)
+    market: dict = field(default_factory=dict)
 
     def total_cash(self):
         return sum(c.cash for c in self.companies if c.active)

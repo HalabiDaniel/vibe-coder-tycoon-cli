@@ -971,3 +971,39 @@ INVESTOR_NAMES = [
     "Accel Parody", "Benchmark Clone", "Index Ventures Parody",
 ]
 
+
+# ─────────────────────── PHASE 12 — STOCK MARKET / IPO ────────
+#
+# Parody public companies that trade on the in-game exchange. The player can
+# NOT buy these — they exist as market context / flavour and to anchor a parody
+# index. Each carries a ticker, a base share price, and a volatility factor that
+# scales its daily random walk.
+
+PARODY_PUBLIC_COMPANIES = [
+    {"name": "OpenAy",         "ticker": "OPAY", "base_price": 312.0, "volatility": 0.045,
+     "founder": "Sam Altmannish", "drift": 0.010},
+    {"name": "Anthrowpick",    "ticker": "ANPK", "base_price": 188.0, "volatility": 0.035,
+     "founder": "Dario Amodai", "drift": 0.009},
+    {"name": "Googol DeepMine","ticker": "GDM",  "base_price": 174.0, "volatility": 0.028,
+     "founder": "Demis Hasabits", "drift": 0.006},
+    {"name": "Mehta",          "ticker": "MEH",  "base_price": 506.0, "volatility": 0.030,
+     "founder": "Mark Zuckerbyte", "drift": 0.005},
+    {"name": "Macrosoft",      "ticker": "MCSF", "base_price": 421.0, "volatility": 0.022,
+     "founder": "Bill Gaits", "drift": 0.004},
+    {"name": "DeepPeek",       "ticker": "DPK",  "base_price": 92.0,  "volatility": 0.075,
+     "founder": "Liang WenPing", "drift": 0.014},
+    {"name": "yAI",            "ticker": "YAI",  "base_price": 64.0,  "volatility": 0.090,
+     "founder": "Elong Mask", "drift": 0.012},
+    {"name": "Aliblabla Cloud","ticker": "ALBC", "base_price": 118.0, "volatility": 0.033,
+     "founder": "Wang Serverman", "drift": 0.005},
+]
+
+# IPO pipeline tuning
+IPO_MIN_POSITIVE_MRR_MONTHS = 12      # consecutive months of positive MRR required
+IPO_BANK_COST_PCT          = 0.04     # investment bank fee, % of company valuation
+IPO_BANK_COST_MIN          = 25_000   # floor on the bank fee
+IPO_PUBLIC_FLOAT_PCT       = 0.20     # fraction of shares sold to the public at IPO
+IPO_DUE_DILIGENCE_CHANCE   = 0.45     # chance the due-diligence event surfaces an issue
+
+# Net-worth / victory
+TRILLIONAIRE_THRESHOLD = 1_000_000_000_000

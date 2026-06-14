@@ -20,7 +20,7 @@ from .ui.screens.companies import CompaniesUIState, draw_companies
 from .ui.screens.projects import ProjectsUIState, draw_projects
 from .ui.screens.development import DevUIState, draw_development
 from .ui.screens.employees import EmployeesUIState, draw_employees, _assignable_projects
-from .ui.screens.market import draw_market, MarketUIState
+from .ui.screens.market import draw_market, MarketUIState, draw_stocks, draw_ipo
 from .ui.screens.model_lab import draw_model_lab, ModelLabUIState
 from .ui.screens.funding import draw_funding, FundingUIState
 from .ui.screens.research import ResearchUIState, draw_research
@@ -226,6 +226,10 @@ def main(stdscr):
                 elif tab == "Market":
                     if market_ui.view == "model_lab":
                         draw_model_lab(stdscr, gs, model_lab_ui)
+                    elif market_ui.view == "stocks":
+                        draw_stocks(stdscr, gs, market_ui)
+                    elif market_ui.view == "ipo":
+                        draw_ipo(stdscr, gs, market_ui)
                     else:
                         draw_market(stdscr, gs, market_ui)
                 elif tab == "Research":
@@ -1363,6 +1367,57 @@ def main(stdscr):
                     if key == 27:
                         market_ui.view = "market"
                         model_lab_ui.message = ""
+                elif market_ui.view == "stocks":
+                    if key in (27, ord('t'), ord('T')):
+                        market_ui.view = "market"
+                        market_ui.message = ""
+                    elif key in (ord('p'), ord('P')):
+                        market_ui.view = "ipo"
+                        market_ui.message = ""
+                        market_ui.ipo_price = ""
+                        market_ui.ipo_shares = ""
+                        market_ui.ipo_field = 0
+                elif market_ui.view == "ipo":
+                    from .ui.screens.market import _ipo_companies
+                    companies = _ipo_companies(gs)
+                    if key == 27:
+                        market_ui.view = "stocks"
+                        market_ui.message = ""
+                    elif key == curses.KEY_UP:
+                        market_ui.stock_company_sel = max(0, market_ui.stock_company_sel - 1)
+                    elif key == curses.KEY_DOWN:
+                        market_ui.stock_company_sel = min(
+                            max(0, len(companies) - 1), market_ui.stock_company_sel + 1)
+                    elif key == 9:   # Tab switches input field
+                        market_ui.ipo_field = 1 - market_ui.ipo_field
+                    elif companies:
+                        c = companies[min(market_ui.stock_company_sel, len(companies) - 1)]
+                        if key in (10, curses.KEY_ENTER):
+                            if c.ipo_stage != "Pricing":
+                                result = dispatch(gs, "prepare_ipo", company_id=c.id)
+                                market_ui.message = result.message
+                            else:
+                                try:
+                                    price = float(market_ui.ipo_price or "0")
+                                    shares = int(market_ui.ipo_shares or "0")
+                                except ValueError:
+                                    price, shares = 0.0, 0
+                                result = dispatch(gs, "price_ipo",
+                                                  company_id=c.id, price=price, shares=shares)
+                                market_ui.message = result.message
+                                if result.ok:
+                                    market_ui.view = "stocks"
+                        elif key in (8, 127, curses.KEY_BACKSPACE):
+                            if market_ui.ipo_field == 0:
+                                market_ui.ipo_price = market_ui.ipo_price[:-1]
+                            else:
+                                market_ui.ipo_shares = market_ui.ipo_shares[:-1]
+                        elif 48 <= key <= 57 or (key == ord('.') and market_ui.ipo_field == 0):
+                            ch = chr(key)
+                            if market_ui.ipo_field == 0:
+                                market_ui.ipo_price += ch
+                            else:
+                                market_ui.ipo_shares += ch
                 else:
                     models = available_models(gs)
                     if key == curses.KEY_UP:
@@ -1389,6 +1444,9 @@ def main(stdscr):
                     elif key in (ord('l'), ord('L')):
                         market_ui.view = "model_lab"
                         model_lab_ui.message = ""
+                    elif key in (ord('t'), ord('T')):
+                        market_ui.view = "stocks"
+                        market_ui.message = ""
 
             elif tab == "Research":
                 if key == curses.KEY_UP:

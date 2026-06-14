@@ -116,6 +116,7 @@ def _gs_to_dict(gs: GameState, username: str) -> dict:
         "funding_deals": [d.__dict__ for d in gs.funding_deals],
         "pending_offers": gs.pending_offers,
         "loan_default_count": gs.loan_default_count,
+        "market": gs.market,
     }
 
 def save_game(gs: GameState, username: str) -> dict:
@@ -293,6 +294,18 @@ def _migrate(data: dict) -> dict:
         data.setdefault("pending_offers", [])
         data.setdefault("loan_default_count", 0)
         data["schema_version"] = 10
+    if version < 11:
+        # Phase 12: stock market / IPO fields
+        for c in data.get("companies", []):
+            c.setdefault("is_public", False)
+            c.setdefault("ipo_stage", "")
+            c.setdefault("share_price", 0.0)
+            c.setdefault("shares_outstanding", 0)
+            c.setdefault("player_equity_pct", 1.0)
+            c.setdefault("positive_mrr_streak", 0)
+            c.setdefault("share_price_history", [])
+        data.setdefault("market", {})
+        data["schema_version"] = 11
     return data
 
 
@@ -361,6 +374,13 @@ def _dict_to_gs(data: dict) -> GameState:
             datacenter_tier=int(c.get("datacenter_tier", 0)),
             compute_capacity=int(c.get("compute_capacity", 0)),
             compute_for_sale=bool(c.get("compute_for_sale", False)),
+            is_public=bool(c.get("is_public", False)),
+            ipo_stage=c.get("ipo_stage", ""),
+            share_price=float(c.get("share_price", 0.0)),
+            shares_outstanding=int(c.get("shares_outstanding", 0)),
+            player_equity_pct=float(c.get("player_equity_pct", 1.0)),
+            positive_mrr_streak=int(c.get("positive_mrr_streak", 0)),
+            share_price_history=list(c.get("share_price_history", [])),
         ))
 
     def _load_project(pd: dict) -> Project:
@@ -469,6 +489,7 @@ def _dict_to_gs(data: dict) -> GameState:
         funding_deals=funding_deals,
         pending_offers=list(data.get("pending_offers", [])),
         loan_default_count=int(data.get("loan_default_count", 0)),
+        market=dict(data.get("market", {})),
     )
 
 

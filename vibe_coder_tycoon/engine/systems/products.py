@@ -202,6 +202,12 @@ def _product_launch(gs: GameState, project_idx: int) -> ActionResult:
     p.age_months = 0
     p.revenue_history = []
     msg = launch_product(gs, p)
+    # Phase 12: a launch lifts a public company's stock
+    c = gs.company_by_id(p.company_id)
+    if c is not None and c.is_public:
+        from .stocks import apply_price_shock
+        apply_price_shock(c, 0.06)
+        msg += f"  📈 {c.name} stock ticked up on the launch."
     return ActionResult(ok=True, message=msg)
 
 

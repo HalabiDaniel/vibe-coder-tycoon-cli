@@ -123,6 +123,22 @@ def _vibe_gauge(vibe: float, width: int = 5) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
+def fmt_money_short(amount: float) -> str:
+    """Compact currency formatter: $1.2T, $450.0M, $12.3K, $980."""
+    a = float(amount)
+    sign = "-" if a < 0 else ""
+    a = abs(a)
+    if a >= 1e12:
+        return f"{sign}${a / 1e12:.2f}T"
+    if a >= 1e9:
+        return f"{sign}${a / 1e9:.2f}B"
+    if a >= 1e6:
+        return f"{sign}${a / 1e6:.1f}M"
+    if a >= 1e3:
+        return f"{sign}${a / 1e3:.1f}K"
+    return f"{sign}${a:,.0f}"
+
+
 def draw_topbar(win, gs: GameState):
     h, w = win.getmaxyx()
     win.attron(curses.color_pair(PAIR_TOPBAR))
@@ -181,6 +197,15 @@ def draw_topbar(win, gs: GameState):
         cx += 1
 
     _stat(f"  🏢 {len(gs.active_companies())} cos", curses.color_pair(PAIR_TOPBAR))
+
+    # Phase 12: net worth (trillionaire metric)
+    try:
+        from ..engine.systems.stocks import net_worth
+        nw = net_worth(gs)
+        _stat(f"  💎 NW:{fmt_money_short(nw)}",
+              curses.color_pair(PAIR_TOPBAR) | curses.A_BOLD)
+    except Exception:
+        pass
 
 def draw_tabs(win, active_tab: int):
     h, w = win.getmaxyx()

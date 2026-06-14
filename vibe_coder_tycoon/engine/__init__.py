@@ -22,6 +22,7 @@ from .systems import templates        # registers template actions (Phase 8)
 from .systems import infra            # registers infrastructure actions (Phase 9)
 from .systems import player_models    # registers player model actions (Phase 10)
 from .systems import investors        # registers investor/loan actions (Phase 11)
+from .systems import stocks           # registers stock/IPO actions (Phase 12)
 
 
 def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
@@ -64,6 +65,8 @@ def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:
     names = models_ai.available_model_names(gs)
     if names:
         gs.active_model = names[0]
+    # Phase 12: seed the parody stock market snapshot.
+    stocks.init_market(gs)
     return gs
 
 
@@ -114,6 +117,9 @@ def advance_month(gs: GameState) -> str:
 
     # Phase 11: investor deal checks + random new offers
     events_this_month.extend(investors.monthly_investors_tick(gs))
+
+    # Phase 12: stock market price movement, MRR streaks, shareholder pressure
+    events_this_month.extend(stocks.monthly_stocks_tick(gs))
 
     # Phase 6: mental-health settlement (employee sanity, conditions, founder)
     events_this_month.extend(mental_health.monthly_tick(gs))
