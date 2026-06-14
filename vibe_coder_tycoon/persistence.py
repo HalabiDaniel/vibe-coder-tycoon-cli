@@ -217,6 +217,28 @@ def _migrate(data: dict) -> dict:
             c.setdefault("parent_company_id", -1)
             c.setdefault("history", [])
         data["schema_version"] = 5
+    if version < 6:
+        # Phase 5: payroll moves to finance settlement; un-bake salaries that the
+        # old hire path had added directly into company monthly_expenses.
+        comp_by_id = {c["id"]: c for c in data.get("companies", [])}
+        for e in data.get("employees", []):
+            c = comp_by_id.get(e.get("company_id"))
+            if c is not None:
+                c["monthly_expenses"] = max(0, c.get("monthly_expenses", 0) - int(e.get("salary", 0)))
+        # add employee five-stat / XP / assignment fields
+        for e in data.get("employees", []):
+            base = int(e.get("skill", 50))
+            e.setdefault("coding", base)
+            e.setdefault("prompting", base)
+            e.setdefault("research", max(1, base - 10))
+            e.setdefault("marketing", max(1, base - 10))
+            e.setdefault("sanity", 80)
+            e.setdefault("xp", 0)
+            e.setdefault("assigned_project_id", -1)
+            e.setdefault("state", "active")
+            e.setdefault("state_until", 0)
+            e.setdefault("backstory", "")
+        data["schema_version"] = 6
     return data
 
 
@@ -307,8 +329,19 @@ def _dict_to_gs(data: dict) -> GameState:
             )
         return p
 
+    _emp_fields = {
+        "name", "role", "level", "salary", "mood", "skill", "hired_year",
+        "company_id", "trait", "loyalty", "productivity",
+        "coding", "prompting", "research", "marketing", "sanity", "xp",
+        "assigned_project_id", "state", "state_until", "backstory",
+    }
+
+    def _load_employee(ed: dict) -> Employee:
+        clean = {k: v for k, v in ed.items() if k in _emp_fields}
+        return Employee(**clean)
+
     projects  = [_load_project(dict(p)) for p in data.get("projects", [])]
-    employees = [Employee(**e) for e in data.get("employees", [])]
+    employees = [_load_employee(e) for e in data.get("employees", [])]
     return GameState(
         founder=founder,
         year=data["year"],

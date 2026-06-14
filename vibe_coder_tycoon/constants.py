@@ -520,3 +520,134 @@ OBSOLESCENCE_WINDOWS = {
 # Auto-update interval options (months; 0 = disabled)
 AUTO_UPDATE_CYCLES = [0, 1, 2, 3, 6]
 
+
+# ─────────────────────── PHASE 5 — EMPLOYEES ──────────────────
+#
+# Five-stat model: coding, prompting, research, marketing, sanity (0–100).
+# Each role has a stat profile (which stats are emphasised), a salary range,
+# the office level at which it unlocks, and a reputation gate (top talent
+# refuses to work for low-reputation founders).
+
+ROLE_CATALOG = {
+    "Vibe Coder": {
+        "primary": ["coding", "prompting"],
+        "salary": (1500, 2800),
+        "office_level": 1,
+        "min_reputation": 0,
+        "blurb": "Ships features at 2am fuelled by energy drinks and vibes.",
+    },
+    "Prompt Engineer": {
+        "primary": ["prompting", "research"],
+        "salary": (1800, 3200),
+        "office_level": 1,
+        "min_reputation": 0,
+        "blurb": "Whisperer of language models. Knows the magic words.",
+    },
+    "Frontend Dev": {
+        "primary": ["coding", "marketing"],
+        "salary": (2000, 3500),
+        "office_level": 2,
+        "min_reputation": 10,
+        "blurb": "Pixel-perfect UIs and a suspicious love of CSS.",
+    },
+    "Backend Dev": {
+        "primary": ["coding", "research"],
+        "salary": (2200, 3800),
+        "office_level": 2,
+        "min_reputation": 10,
+        "blurb": "Keeps the servers warm and the migrations terrifying.",
+    },
+    "Bug Hunter": {
+        "primary": ["research", "coding"],
+        "salary": (2000, 3500),
+        "office_level": 3,
+        "min_reputation": 20,
+        "blurb": "Finds the bug you swore wasn't there. QA wizardry.",
+    },
+    "Growth Goblin": {
+        "primary": ["marketing", "prompting"],
+        "salary": (1800, 3200),
+        "office_level": 3,
+        "min_reputation": 20,
+        "blurb": "Turns launches viral. Possibly unhinged. Definitely effective.",
+    },
+    "Pixel Artist": {
+        "primary": ["marketing", "coding"],
+        "salary": (1800, 3000),
+        "office_level": 4,
+        "min_reputation": 35,
+        "blurb": "Makes things beautiful. Refuses to use Comic Sans.",
+    },
+    "Community Wizard": {
+        "primary": ["marketing", "sanity"],
+        "salary": (1600, 2800),
+        "office_level": 4,
+        "min_reputation": 35,
+        "blurb": "Keeps users happy and churn low. Discord moderator energy.",
+    },
+    "Finance Gremlin": {
+        "primary": ["research", "marketing"],
+        "salary": (2500, 4500),
+        "office_level": 5,
+        "min_reputation": 50,
+        "blurb": "Hoards spreadsheets. Knows where every token went.",
+    },
+    "Operations Goblin": {
+        "primary": ["research", "sanity"],
+        "salary": (2500, 4500),
+        "office_level": 6,
+        "min_reputation": 60,
+        "blurb": "Makes the chaos run on time. The glue of the company.",
+    },
+}
+
+# Candidate name banks (procedural generation)
+CANDIDATE_FIRST_NAMES = [
+    "Ama", "Taro", "Zara", "Ivan", "Lena", "Rafi", "Suki", "Omar", "Nina",
+    "Kojo", "Mei", "Diego", "Priya", "Yuki", "Sam", "Aria", "Bilal", "Noa",
+    "Kai", "Esme", "Tariq", "Vera", "Liam", "Sana", "Oleg", "Fatima",
+]
+CANDIDATE_LAST_NAMES = [
+    "Kwei", "Naka", "Malik", "Petrov", "Chen", "Hassan", "Park", "Ali",
+    "Okafor", "Sato", "Rossi", "Nguyen", "Cohen", "Santos", "Ahmed", "Singh",
+    "Volkov", "Haddad", "Murphy", "Bauer", "Costa", "Reyes",
+]
+CANDIDATE_BACKSTORIES = [
+    "Ex-FAANG, quit to 'find meaning'. Found mostly bugs.",
+    "Self-taught from YouTube at 2x speed. Surprisingly competent.",
+    "Built 14 side projects, shipped 1. That one went viral.",
+    "Recovering crypto founder. Talks about 'product-market fit' a lot.",
+    "Bootcamp grad with terrifying levels of energy.",
+    "Former game modder. Optimises everything obsessively.",
+    "Open-source maintainer with 9,000 GitHub stars and no sleep.",
+    "Career-switcher from accounting. Reads docs for fun.",
+    "Hackathon legend. Allergic to meetings.",
+    "Indie hacker who 'just wants a stable paycheck for once'.",
+]
+
+# Training actions — applied to one employee, paid from their company's cash
+TRAINING_ACTIONS = [
+    {
+        "name": "Pair Prompting",
+        "cost": 150,
+        "effects": {"prompting": 6, "coding": 2, "sanity": -2},
+        "desc": "A focused pairing session. Cheap, reliable prompting boost.",
+    },
+    {
+        "name": "Skill Workshop",
+        "cost": 300,
+        "effects": {"coding": 5, "research": 3, "sanity": -3},
+        "desc": "Hands-on workshop. Solid engineering gains, mildly draining.",
+    },
+    {
+        "name": "Conference Ticket",
+        "cost": 600,
+        "effects": {"research": 8, "marketing": 4, "sanity": 6},
+        "desc": "Send them to a conference. Pricey, but inspiring and restful.",
+    },
+]
+
+# XP required to advance from level L to L+1
+def xp_threshold(level: int) -> int:
+    return 100 * max(1, level)
+

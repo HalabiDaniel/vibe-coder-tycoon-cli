@@ -20,6 +20,10 @@ def monthly_settlement(gs: GameState) -> list:
     for c in gs.active_companies():
         net = c.monthly_revenue - c.monthly_expenses
 
+        # Phase 5: payroll for the company's active roster
+        payroll = sum(e.salary for e in gs.employees_for_company(c.id))
+        net -= payroll
+
         # Deduct loan repayments
         for loan in list(c.loans):
             payment = loan.monthly_payment if isinstance(loan, Loan) else loan.get("monthly_payment", 0)

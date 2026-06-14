@@ -284,7 +284,14 @@ def _draw_holding_view(win, gs: GameState, ui, holding: Company, h: int, w: int)
                         curses.color_pair(PAIR_MUTED))
             y += 1
 
+    if subsidiaries:
+        safe_addstr(win, h - 4, 2,
+                    "S: sweep all subsidiary cash up to holding",
+                    curses.color_pair(PAIR_BUTTON) | curses.A_BOLD)
     safe_addstr(win, h - 3, 2, "Esc: back", curses.color_pair(PAIR_MUTED))
+    if ui.message:
+        mp = PAIR_ACCENT if "✓" in ui.message else PAIR_DANGER
+        safe_addstr(win, h - 2, 2, ui.message[:w - 4], curses.color_pair(mp) | curses.A_BOLD)
 
 
 def _draw_finance_prompt(win, gs: GameState, ui, h, w):

@@ -15,6 +15,7 @@ from .systems import finance        # registers finance actions as a side-effect
 from .systems import development    # registers dev actions as a side-effect
 from .systems import products       # registers product actions as a side-effect
 from .systems import companies      # registers company/office actions as a side-effect
+from .systems import employees       # registers employee actions as a side-effect
 
 
 def make_new_game(founder: Founder, ai_sub_idx: int) -> GameState:

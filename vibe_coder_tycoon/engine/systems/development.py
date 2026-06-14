@@ -76,6 +76,13 @@ def tick_dev_project(gs: GameState, p) -> list:
     if company:
         token_cost_mult *= get_synergy_bonus(gs, company)
 
+    # Phase 5: assigned-employee team bonus
+    from .employees import get_project_team_bonus  # lazy to avoid init-order issues
+    team_bonus = get_project_team_bonus(gs, gs.projects.index(p))
+    design_team_mult = team_bonus["design_mult"]
+    tech_team_mult = team_bonus["tech_mult"]
+    bug_team_mult = team_bonus["bug_mult"]
+
     days_this_month = 28 + random.randint(-3, 5)
     interrupted = False
 
@@ -85,14 +92,14 @@ def tick_dev_project(gs: GameState, p) -> list:
 
         p.dev_day += 1
 
-        # Design + tech score gain per day (boosted by focus dev_speed_mult)
-        design_gain = (sub["quality"] * 15.0 / p.dev_total_days) * vibe_mult * dev_speed_mult * random.uniform(0.7, 1.3)
-        tech_gain   = (sub["quality"] * 14.0 / p.dev_total_days) * dev_speed_mult             * random.uniform(0.7, 1.3)
+        # Design + tech score gain per day (boosted by focus + team)
+        design_gain = (sub["quality"] * 15.0 / p.dev_total_days) * vibe_mult * dev_speed_mult * design_team_mult * random.uniform(0.7, 1.3)
+        tech_gain   = (sub["quality"] * 14.0 / p.dev_total_days) * dev_speed_mult * tech_team_mult             * random.uniform(0.7, 1.3)
         p.design_score = min(100.0, p.design_score + design_gain)
         p.tech_score   = min(100.0, p.tech_score   + tech_gain)
 
-        # Bug generation: vibe multiplies chaos
-        if random.random() < sub["bug_risk"] * vibe_mult * 0.03:
+        # Bug generation: vibe multiplies chaos, team QA suppresses it
+        if random.random() < sub["bug_risk"] * vibe_mult * 0.03 * bug_team_mult:
             p.bug_count += 1
 
         # Token consumption per day (reduced by focus token_cost_mult)
@@ -198,6 +205,14 @@ def _finalize_dev(gs: GameState, p) -> None:
     p.quality_score = int(p.design_score * 0.4 + p.tech_score * 0.4 + bug_penalty * 0.2)
 
     p.status = "Dev Complete"
+
+    # Phase 5: assigned team earns XP toward leveling
+    from .employees import award_project_xp  # lazy
+    xp_events = award_project_xp(gs, gs.projects.index(p))
+    gs.events = xp_events + gs.events
+    for ev in xp_events:
+        _add_log(p.dev_session, ev[1])
+
     _add_log(
         p.dev_session,
         f"[Complete] Quality: {p.quality_score}/100  Hype: {p.hype}  "

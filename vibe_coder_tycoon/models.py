@@ -83,6 +83,17 @@ class Employee:
     trait: str = ""
     loyalty: int = 75
     productivity: int = 75
+    # Phase 5 — five-stat model, XP, assignment, state
+    coding: int = 50
+    prompting: int = 50
+    research: int = 50
+    marketing: int = 50
+    sanity: int = 80
+    xp: int = 0
+    assigned_project_id: int = -1   # index into gs.projects, -1 = unassigned
+    state: str = "active"           # "active" | "touch_grass"
+    state_until: int = 0            # months_elapsed when they return to active
+    backstory: str = ""
 
 
 @dataclass
@@ -149,7 +160,7 @@ class GameState:
     research_progress: dict
     settings: dict
     demo_ended: bool = False
-    schema_version: int = 5
+    schema_version: int = 6
 
     def total_cash(self):
         return sum(c.cash for c in self.companies if c.active)

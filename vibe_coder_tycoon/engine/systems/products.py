@@ -23,8 +23,10 @@ def launch_product(gs: GameState, p: Project) -> str:
     Full launch resolution. Sets initial users, revenue, churn, obsolescence window.
     Called by dev_launch action. Returns a summary string.
     """
+    from .employees import get_post_launch_bonus  # lazy
     quality = p.quality_score
-    hype = p.hype
+    hype = min(100, p.hype + int(get_post_launch_bonus(gs, p.company_id)["hype_bonus"]))
+    p.hype = hype
     rep = gs.founder.reputation
 
     if not p.revenue_model:
@@ -94,10 +96,13 @@ def monthly_product_tick(gs: GameState, p: Project, date_str: str) -> list:
     # Obsolescence factor — silent per GDD
     obso = _obsolescence_factor(p)
 
-    # User growth / churn
+    # User growth / churn (Phase 5: Community Wizards reduce effective churn)
+    from .employees import get_post_launch_bonus  # lazy
+    team = get_post_launch_bonus(gs, p.company_id)
     quality = p.quality_score
     growth_rate = 0.04 + quality / 2500.0           # 4 – 8% per month
-    net_pct = (growth_rate - p.churn_rate) * obso
+    eff_churn = p.churn_rate * team["churn_mult"]
+    net_pct = (growth_rate - eff_churn) * obso
     if p.active_users > 0:
         p.active_users = max(0, p.active_users + int(p.active_users * net_pct))
     p.users = p.active_users

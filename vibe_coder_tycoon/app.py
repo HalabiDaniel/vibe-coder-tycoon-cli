@@ -19,7 +19,7 @@ from .ui.screens.founder import draw_founder
 from .ui.screens.companies import CompaniesUIState, draw_companies
 from .ui.screens.projects import ProjectsUIState, draw_projects
 from .ui.screens.development import DevUIState, draw_development
-from .ui.screens.employees import EmployeesUIState, draw_employees
+from .ui.screens.employees import EmployeesUIState, draw_employees, _assignable_projects
 from .ui.screens.market import draw_market
 from .ui.screens.research import ResearchUIState, draw_research
 from .ui.screens.news import NewsUIState, draw_news
@@ -46,6 +46,7 @@ from .constants import (
 from .engine.systems.companies import (
     can_build_project_type, get_office_employee_cap, get_focus_data,
 )
+from .engine.systems.employees import generate_candidates
 
 
 # ─────────────────────── MAIN LOOP ────────────────────────────
@@ -848,6 +849,27 @@ def main(stdscr):
                 elif companies_ui.view == "holding":
                     if key == 27:
                         companies_ui.view = "list"
+                        companies_ui.message = ""
+                    elif key in (ord('s'), ord('S')):
+                        holding = (gs.companies[companies_ui.selected]
+                                   if gs.companies and 0 <= companies_ui.selected < len(gs.companies)
+                                   else None)
+                        if holding is not None:
+                            subs = [c for c in gs.companies
+                                    if c.parent_company_id == holding.id and c.active]
+                            swept = 0
+                            for sub in subs:
+                                if sub.cash > 0:
+                                    res = dispatch(gs, "transfer_between_companies",
+                                                   from_id=sub.id, to_id=holding.id,
+                                                   amount=sub.cash)
+                                    if res.ok:
+                                        swept += 1
+                            if swept:
+                                companies_ui.message = f"✓ Swept cash from {swept} subsidiary(ies)."
+                            else:
+                                companies_ui.message = "✗ Nothing to sweep."
+                            status_msg = companies_ui.message
 
                 elif companies_ui.view == "new":
                     if key == 27:
@@ -1024,38 +1046,106 @@ def main(stdscr):
                             status_msg = projects_ui.message
 
             elif tab == "Employees":
-                if key == curses.KEY_UP:
-                    employees_ui.selected = max(0, employees_ui.selected - 1)
-                elif key == curses.KEY_DOWN:
-                    employees_ui.selected = min(len(gs.employees)-1,
-                                                employees_ui.selected + 1)
-                elif key in (ord('h'), ord('H')):
-                    names = ["Ama Kwei", "Taro Naka", "Zara Malik", "Ivan Petrov",
-                             "Lena Chen", "Rafi Hassan", "Suki Park", "Omar Ali"]
-                    if gs.active_companies():
-                        cid = gs.active_companies()[0].id
-                        c = gs.company_by_id(cid)
-                        # Phase 4: enforce office employee cap
-                        emp_count = len(gs.employees_for_company(cid))
-                        emp_cap = get_office_employee_cap(c) if c else 2
-                        if emp_count >= emp_cap:
-                            status_msg = f"✗ Office full ({emp_count}/{emp_cap}). Upgrade office (O) to hire more."
+                eui = employees_ui
+
+                # ── HIRE VIEW ─────────────────────────────────
+                if eui.view == "hire":
+                    if key == 27:
+                        eui.view = "list"
+                        eui.message = ""
+                    elif key == curses.KEY_UP:
+                        eui.cand_sel = max(0, eui.cand_sel - 1)
+                    elif key == curses.KEY_DOWN:
+                        eui.cand_sel = min(len(eui.candidates) - 1, eui.cand_sel + 1)
+                    elif key in (ord('r'), ord('R')):
+                        eui.candidates = generate_candidates(gs, eui.hire_company_id, 4)
+                        eui.cand_sel = 0
+                        eui.message = "Rerolled candidates."
+                    elif key in (10, curses.KEY_ENTER):
+                        if eui.candidates and 0 <= eui.cand_sel < len(eui.candidates):
+                            cand = eui.candidates[eui.cand_sel]
+                            result = dispatch(gs, "hire_employee",
+                                              company_id=eui.hire_company_id, candidate=cand)
+                            eui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                            if result.ok:
+                                eui.candidates.pop(eui.cand_sel)
+                                eui.cand_sel = max(0, eui.cand_sel - 1)
+                                if not eui.candidates:
+                                    eui.view = "list"
+
+                # ── ASSIGN VIEW ───────────────────────────────
+                elif eui.view == "assign":
+                    if key == 27:
+                        eui.view = "list"
+                    elif 0 <= eui.selected < len(gs.employees):
+                        emp = gs.employees[eui.selected]
+                        options = _assignable_projects(gs, emp)
+                        if key == curses.KEY_UP:
+                            eui.assign_sel = max(0, eui.assign_sel - 1)
+                        elif key == curses.KEY_DOWN:
+                            eui.assign_sel = min(len(options) - 1, eui.assign_sel + 1)
+                        elif key in (10, curses.KEY_ENTER) and options:
+                            pidx = options[eui.assign_sel][0]
+                            result = dispatch(gs, "assign_employee",
+                                              emp_index=eui.selected, project_idx=pidx)
+                            eui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                            if result.ok:
+                                eui.view = "list"
+
+                # ── TRAIN VIEW ────────────────────────────────
+                elif eui.view == "train":
+                    if key == 27:
+                        eui.view = "list"
+                        eui.message = ""
+                    elif key == curses.KEY_UP:
+                        eui.train_sel = max(0, eui.train_sel - 1)
+                    elif key == curses.KEY_DOWN:
+                        eui.train_sel = min(len(TRAINING_ACTIONS) - 1, eui.train_sel + 1)
+                    elif key in (10, curses.KEY_ENTER):
+                        result = dispatch(gs, "train_employee",
+                                          emp_index=eui.selected, training_idx=eui.train_sel)
+                        eui.message = ("✓ " if result.ok else "✗ ") + result.message
+                        status_msg = result.message
+
+                # ── LIST VIEW ─────────────────────────────────
+                else:
+                    if key == curses.KEY_UP:
+                        eui.selected = max(0, eui.selected - 1)
+                    elif key == curses.KEY_DOWN:
+                        eui.selected = min(len(gs.employees) - 1, eui.selected + 1)
+                    elif key in (ord('h'), ord('H')):
+                        if gs.active_companies():
+                            cid = gs.active_companies()[0].id
+                            eui.hire_company_id = cid
+                            eui.candidates = generate_candidates(gs, cid, 4)
+                            eui.cand_sel = 0
+                            eui.view = "hire"
+                            eui.message = ""
                         else:
-                            emp = Employee(
-                                name=random.choice(names),
-                                role=random.choice(EMPLOYEE_ROLES),
-                                level=1,
-                                salary=random.randint(1500, 3500),
-                                mood=random.randint(70, 90),
-                                skill=random.randint(40, 65),
-                                hired_year=gs.year,
-                                company_id=cid,
-                                trait=random.choice(EMPLOYEE_TRAITS),
-                            )
-                            gs.employees.append(emp)
-                            if c:
-                                c.monthly_expenses += emp.salary
-                            status_msg = f"Hired {emp.name} as {emp.role}!"
+                            status_msg = "Create a company first."
+                    elif gs.employees and 0 <= eui.selected < len(gs.employees):
+                        if key in (10, curses.KEY_ENTER):
+                            eui.view = "assign"
+                            eui.assign_sel = 0
+                        elif key in (ord('u'), ord('U')):
+                            result = dispatch(gs, "unassign_employee", emp_index=eui.selected)
+                            eui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                        elif key in (ord('t'), ord('T')):
+                            eui.view = "train"
+                            eui.train_sel = 0
+                            eui.message = ""
+                        elif key in (ord('r'), ord('R')):
+                            result = dispatch(gs, "rest_employee", emp_index=eui.selected)
+                            eui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                        elif key in (ord('f'), ord('F')):
+                            result = dispatch(gs, "fire_employee", emp_index=eui.selected)
+                            eui.message = ("✓ " if result.ok else "✗ ") + result.message
+                            status_msg = result.message
+                            eui.selected = max(0, eui.selected - 1)
 
             elif tab == "Research":
                 if key == curses.KEY_UP:
